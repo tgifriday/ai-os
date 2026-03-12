@@ -1,0 +1,19 @@
+[package]
+name = "aios-llm"
+description = "AIOS pluggable LLM runtime with local, network, and cloud backends"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+toml = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+reqwest = { workspace = true }
+tracing = { workspace = true }
+tokio-stream = "0.1"
+async-stream = "0.3"

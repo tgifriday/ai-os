@@ -1,0 +1,12 @@
+[package]
+name = "aios-kernel"
+description = "AIOS kernel abstraction layer over Linux syscalls"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+nix = { version = "0.29", features = ["fs", "process", "signal", "net", "mount", "hostname"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }

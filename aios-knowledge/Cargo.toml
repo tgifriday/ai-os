@@ -1,0 +1,13 @@
+[package]
+name = "aios-knowledge"
+description = "AIOS embedded knowledge base with RAG for OS self-awareness"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }

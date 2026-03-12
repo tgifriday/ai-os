@@ -1,0 +1,19 @@
+[system]
+hostname = "aios"
+log_level = "info"
+data_dir = "/var/aios"
+
+[services]
+llm_daemon = true
+knowledge_daemon = true
+shell_sessions = true
+
+[services.llm_daemon_config]
+auto_start = true
+restart_on_failure = true
+max_restarts = 3
+
+[services.knowledge_daemon_config]
+auto_start = true
+restart_on_failure = true
+max_restarts = 3

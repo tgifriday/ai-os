@@ -1,0 +1,26 @@
+[defaults]
+primary = "network"
+fallback = ["network", "cloud"]
+max_context_tokens = 4096
+stream_responses = true
+
+[local]
+enabled = false
+model_path = "/var/aios/models/phi-3-mini-Q4.gguf"
+threads = 4
+gpu_layers = 0
+
+[network]
+enabled = true
+url = "http://192.168.0.232:11434"
+model = "llama3.1:8b"
+
+[cloud.openai]
+enabled = false
+api_key_env = "OPENAI_API_KEY"
+model = "gpt-4o"
+
+[cloud.anthropic]
+enabled = false
+api_key_env = "ANTHROPIC_API_KEY"
+model = "claude-sonnet-4-20250514"

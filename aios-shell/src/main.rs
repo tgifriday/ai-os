@@ -1,0 +1,385 @@
+mod completion;
+mod executor;
+mod history;
+mod parser;
+mod prompt;
+mod router;
+mod scripting;
+
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::terminal;
+use router::{HandleResult, ShellRouter};
+use std::io::{self, Write};
+
+use aios_llm::config::LlmConfig;
+use aios_llm::cloud::{AnthropicBackend, OpenAiBackend};
+use aios_llm::local::LocalBackend;
+use aios_llm::network::NetworkBackend;
+use aios_llm::LlmRouter;
+
+fn load_llm_config() -> LlmConfig {
+    let config_paths = [
+        std::path::PathBuf::from("config/llm.toml"),
+        std::path::PathBuf::from("/etc/aios/llm.toml"),
+        dirs::home_dir()
+            .unwrap_or_default()
+            .join(".config/aios/llm.toml"),
+    ];
+
+    config_paths
+        .iter()
+        .find_map(|p| LlmConfig::load(p).ok())
+        .unwrap_or_default()
+}
+
+fn build_llm_router(config: &LlmConfig) -> LlmRouter {
+    let mut llm_router = LlmRouter::new();
+
+    if config.local.enabled {
+        llm_router.add_backend(Box::new(LocalBackend::new(config.local.clone())));
+    }
+
+    if config.network.enabled {
+        llm_router.add_backend(Box::new(NetworkBackend::new(config.network.clone())));
+    }
+
+    if let Some(ref openai) = config.cloud.openai {
+        if openai.enabled {
+            llm_router.add_backend(Box::new(OpenAiBackend::new(openai.clone())));
+        }
+    }
+
+    if let Some(ref anthropic) = config.cloud.anthropic {
+        if anthropic.enabled {
+            llm_router.add_backend(Box::new(AnthropicBackend::new(anthropic.clone())));
+        }
+    }
+
+    llm_router
+}
+
+fn print_banner(has_ai: bool) {
+    println!("\x1b[1;36m");
+    println!("     _    ___ ___  ____  ");
+    println!("    / \\  |_ _/ _ \\/ ___| ");
+    println!("   / _ \\  | | | | \\___ \\ ");
+    println!("  / ___ \\ | | |_| |___) |");
+    println!(" /_/   \\_\\___\\___/|____/ ");
+    println!("\x1b[0m");
+    println!(" AI Shell v0.1.0");
+    if has_ai {
+        println!(" \x1b[32mAI: online\x1b[0m -- just type what you need, I'll figure it out");
+    } else {
+        println!(" \x1b[33mAI: offline\x1b[0m -- configure LLM in config/llm.toml to enable AI");
+    }
+    println!(" Type \x1b[1mhelp\x1b[0m for commands, \x1b[1mexit\x1b[0m to quit");
+    println!();
+}
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive(tracing::Level::WARN.into()),
+        )
+        .init();
+
+    let config = load_llm_config();
+    let llm_router = build_llm_router(&config);
+    let mut shell_router = ShellRouter::new(Some(llm_router), config);
+
+    print_banner(shell_router.has_ai());
+
+    let mut line_buffer = String::new();
+    let mut cursor_pos: usize = 0;
+    let mut history_index: Option<usize> = None;
+    let mut saved_line = String::new();
+
+    loop {
+        let prompt_config = prompt::PromptConfig {
+            ai_available: shell_router.has_ai(),
+            ..Default::default()
+        };
+        let prompt_str = prompt::format_prompt(
+            &shell_router.executor.cwd,
+            shell_router.executor.last_exit_code,
+            &prompt_config,
+        );
+
+        print!("{}", prompt_str);
+        io::stdout().flush().unwrap();
+
+        line_buffer.clear();
+        cursor_pos = 0;
+        history_index = None;
+
+        if terminal::enable_raw_mode().is_err() {
+            if let Err(_) = read_line_fallback(&mut line_buffer) {
+                break;
+            }
+        } else {
+            let result = read_line_raw(
+                &mut line_buffer,
+                &mut cursor_pos,
+                &mut history_index,
+                &mut saved_line,
+                &shell_router,
+                &prompt_str,
+            );
+            let _ = terminal::disable_raw_mode();
+            println!();
+
+            match result {
+                LineReadResult::Line => {}
+                LineReadResult::Eof => break,
+                LineReadResult::Interrupt => {
+                    line_buffer.clear();
+                    continue;
+                }
+            }
+        }
+
+        let input = line_buffer.trim().to_string();
+        if input.is_empty() {
+            continue;
+        }
+
+        if input == "history" {
+            print!("{}", shell_router.history.format_display());
+            continue;
+        }
+
+        match shell_router.handle_input(&input).await {
+            HandleResult::Continue => {}
+            HandleResult::Exit => break,
+        }
+    }
+
+    println!("Goodbye.");
+}
+
+enum LineReadResult {
+    Line,
+    Eof,
+    Interrupt,
+}
+
+fn read_line_raw(
+    buffer: &mut String,
+    cursor_pos: &mut usize,
+    history_index: &mut Option<usize>,
+    saved_line: &mut String,
+    shell_router: &ShellRouter,
+    prompt_str: &str,
+) -> LineReadResult {
+    loop {
+        if let Ok(Event::Key(key_event)) = event::read() {
+            match key_event {
+                KeyEvent {
+                    code: KeyCode::Enter,
+                    ..
+                } => return LineReadResult::Line,
+
+                KeyEvent {
+                    code: KeyCode::Char('c'),
+                    modifiers: KeyModifiers::CONTROL,
+                    ..
+                } => return LineReadResult::Interrupt,
+
+                KeyEvent {
+                    code: KeyCode::Char('d'),
+                    modifiers: KeyModifiers::CONTROL,
+                    ..
+                } => {
+                    if buffer.is_empty() {
+                        return LineReadResult::Eof;
+                    }
+                }
+
+                KeyEvent {
+                    code: KeyCode::Char('l'),
+                    modifiers: KeyModifiers::CONTROL,
+                    ..
+                } => {
+                    print!("\x1b[2J\x1b[H{}{}", prompt_str, buffer);
+                    io::stdout().flush().unwrap();
+                }
+
+                KeyEvent {
+                    code: KeyCode::Char(c),
+                    modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+                    ..
+                } => {
+                    buffer.insert(*cursor_pos, c);
+                    *cursor_pos += 1;
+                    redraw_line(prompt_str, buffer, *cursor_pos);
+                }
+
+                KeyEvent {
+                    code: KeyCode::Backspace,
+                    ..
+                } => {
+                    if *cursor_pos > 0 {
+                        *cursor_pos -= 1;
+                        buffer.remove(*cursor_pos);
+                        redraw_line(prompt_str, buffer, *cursor_pos);
+                    }
+                }
+
+                KeyEvent {
+                    code: KeyCode::Delete,
+                    ..
+                } => {
+                    if *cursor_pos < buffer.len() {
+                        buffer.remove(*cursor_pos);
+                        redraw_line(prompt_str, buffer, *cursor_pos);
+                    }
+                }
+
+                KeyEvent {
+                    code: KeyCode::Left,
+                    ..
+                } => {
+                    if *cursor_pos > 0 {
+                        *cursor_pos -= 1;
+                        print!("\x1b[D");
+                        io::stdout().flush().unwrap();
+                    }
+                }
+
+                KeyEvent {
+                    code: KeyCode::Right,
+                    ..
+                } => {
+                    if *cursor_pos < buffer.len() {
+                        *cursor_pos += 1;
+                        print!("\x1b[C");
+                        io::stdout().flush().unwrap();
+                    }
+                }
+
+                KeyEvent {
+                    code: KeyCode::Home,
+                    ..
+                }
+                | KeyEvent {
+                    code: KeyCode::Char('a'),
+                    modifiers: KeyModifiers::CONTROL,
+                    ..
+                } => {
+                    *cursor_pos = 0;
+                    redraw_line(prompt_str, buffer, *cursor_pos);
+                }
+
+                KeyEvent {
+                    code: KeyCode::End,
+                    ..
+                }
+                | KeyEvent {
+                    code: KeyCode::Char('e'),
+                    modifiers: KeyModifiers::CONTROL,
+                    ..
+                } => {
+                    *cursor_pos = buffer.len();
+                    redraw_line(prompt_str, buffer, *cursor_pos);
+                }
+
+                KeyEvent {
+                    code: KeyCode::Up, ..
+                } => {
+                    let entries = shell_router.history.entries();
+                    if entries.is_empty() {
+                        continue;
+                    }
+                    let new_index = match *history_index {
+                        None => {
+                            *saved_line = buffer.clone();
+                            entries.len() - 1
+                        }
+                        Some(idx) => {
+                            if idx > 0 {
+                                idx - 1
+                            } else {
+                                continue;
+                            }
+                        }
+                    };
+                    *history_index = Some(new_index);
+                    *buffer = entries[new_index].command.clone();
+                    *cursor_pos = buffer.len();
+                    redraw_line(prompt_str, buffer, *cursor_pos);
+                }
+
+                KeyEvent {
+                    code: KeyCode::Down,
+                    ..
+                } => {
+                    let entries = shell_router.history.entries();
+                    match *history_index {
+                        None => {}
+                        Some(idx) => {
+                            if idx + 1 < entries.len() {
+                                let new_index = idx + 1;
+                                *history_index = Some(new_index);
+                                *buffer = entries[new_index].command.clone();
+                            } else {
+                                *history_index = None;
+                                *buffer = saved_line.clone();
+                            }
+                            *cursor_pos = buffer.len();
+                            redraw_line(prompt_str, buffer, *cursor_pos);
+                        }
+                    }
+                }
+
+                KeyEvent {
+                    code: KeyCode::Tab, ..
+                } => {
+                    let completions =
+                        completion::get_completions(buffer, &shell_router.executor.cwd);
+                    if completions.len() == 1 {
+                        let parts: Vec<&str> = buffer.rsplitn(2, ' ').collect();
+                        if parts.len() == 2 {
+                            *buffer = format!("{} {}", parts[1], completions[0]);
+                        } else {
+                            *buffer = completions[0].clone();
+                            if !buffer.ends_with('/') {
+                                buffer.push(' ');
+                            }
+                        }
+                        *cursor_pos = buffer.len();
+                        redraw_line(prompt_str, buffer, *cursor_pos);
+                    } else if completions.len() > 1 {
+                        println!();
+                        for c in &completions {
+                            print!("{}  ", c);
+                        }
+                        println!();
+                        print!("{}{}", prompt_str, buffer);
+                        io::stdout().flush().unwrap();
+                    }
+                }
+
+                _ => {}
+            }
+        }
+    }
+}
+
+fn redraw_line(prompt: &str, buffer: &str, cursor_pos: usize) {
+    let prompt_len = prompt::strip_ansi(prompt).len();
+    print!("\r\x1b[K{}{}", prompt, buffer);
+    let total_pos = prompt_len + cursor_pos;
+    print!("\r\x1b[{}C", total_pos);
+    io::stdout().flush().unwrap();
+}
+
+fn read_line_fallback(buffer: &mut String) -> io::Result<()> {
+    io::stdin().read_line(buffer)?;
+    if buffer.is_empty() {
+        return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "EOF"));
+    }
+    *buffer = buffer.trim_end_matches('\n').trim_end_matches('\r').to_string();
+    Ok(())
+}
