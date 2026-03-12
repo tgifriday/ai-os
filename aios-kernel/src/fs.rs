@@ -169,7 +169,7 @@ pub fn set_permissions(path: &Path, mode: u32) -> Result<(), FsError> {
     stat::fchmodat(
         None,
         path,
-        stat::Mode::from_bits_truncate(mode as u16),
+        stat::Mode::from_bits_truncate(mode as _),
         stat::FchmodatFlags::FollowSymlink,
     )?;
     Ok(())
