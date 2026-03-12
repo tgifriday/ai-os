@@ -201,6 +201,7 @@ These are the only commands handled by the shell itself. Everything else runs on
 | `history`          | Show command history           |
 | `help`             | Show help                      |
 | `exit` / `quit`    | Exit shell                     |
+| `sanitize`         | Clear AI conversation context  |
 | `llm [subcommand]` | Control AI backend (see above) |
 
 
@@ -213,6 +214,67 @@ These are the only commands handled by the shell itself. Everything else runs on
 | `cmd | @<action>` | Pipe command output to AI          |
 | Plain English     | Auto-routed to AI if not a command |
 | Failed commands   | AI automatically suggests fixes    |
+
+### AI Usage Examples
+
+Use plain `@query` when you want advice or explanation without first running a command:
+
+```bash
+@what does this project do
+@what files here look most important
+@how do I install ollama on this machine
+@what is the difference between aish and aios-os
+```
+
+Use `sanitize` when you want to clear AI conversation context before a fresh question:
+
+```bash
+sanitize
+@tell me what this repo is for
+```
+
+Use `cmd | @question` when the command output is the thing you want analyzed:
+
+```bash
+ls -lah | @summarize
+du -sh ./* | @what is using the most space
+ps aux | @which processes look unusual
+df -h | @which filesystem is closest to full
+git status --short | @tell me what changed
+git diff --stat | @summarize the scope of this work
+cargo test 2>&1 | @summarize failures
+docker ps -a | @which containers look unhealthy
+```
+
+Remote SSH commands work the same way:
+
+```bash
+ssh server01 "uptime && df -h" | @summarize host health
+ssh server01 "ps aux --sort=-%cpu | head" | @which processes are hottest
+ssh gpu01 "nvidia-smi" | @summarize gpu status
+ssh app01 "tail -n 200 /var/log/app.log" | @summarize the errors
+ssh web01 "netstat -an | grep LISTEN" | @what services are exposed
+```
+
+You can also narrow output before sending it to AI:
+
+```bash
+docker logs myapp 2>&1 | tail -n 100 | @what is failing here
+rg "TODO|FIXME" . | @summarize outstanding work
+ls -R src | @describe the code structure
+echo "what's going on in the world" | @summarize
+```
+
+Prompt styles that tend to work well:
+
+```bash
+... | @summarize
+... | @what stands out
+... | @what is wrong here
+... | @what should I check next
+... | @which item is largest
+... | @explain this output
+```
 
 
 ### Pipes and Redirects
