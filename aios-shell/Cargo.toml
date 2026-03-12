@@ -3,6 +3,8 @@ name = "aios-shell"
 description = "AIOS AI-powered shell - the primary user interface"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [[bin]]
 name = "aish"

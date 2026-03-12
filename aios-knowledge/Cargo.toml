@@ -3,6 +3,8 @@ name = "aios-knowledge"
 description = "AIOS embedded knowledge base with RAG for OS self-awareness"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 serde = { workspace = true }

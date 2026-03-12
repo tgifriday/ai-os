@@ -43,6 +43,13 @@
 - `cargo install --path aios-shell` also works
 - `aios-shell` binary still exists as an alias
 
+### License
+
+- Changed from MIT-only to dual **MIT OR Apache-2.0** (Rust ecosystem standard)
+- Added `LICENSE-MIT` and `LICENSE-APACHE` files
+- All 6 crates now inherit license and repository from workspace
+- Added `CONTRIBUTING.md` with contribution licensing terms
+
 ---
 
 ## 0.1.0 -- 2026-03-12
