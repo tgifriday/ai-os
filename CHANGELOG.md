@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.3 -- 2026-03-12
+
+### AI context control
+
+- Added `sanitize` builtin to clear the AI conversation context without affecting shell history, cwd, env vars, or LLM configuration
+- Added `sanitize` to shell command recognition, help output, and tab completion in both `aish` and `aios-os`
+
+### AI pipe isolation and capture
+
+- `cmd | @question` no longer sends prior conversation history to the LLM and does not pollute later `@query` conversations
+- AI-pipe execution now forces captured stdout for analysis, so commands like `ssh host "nvidia-smi" | @summarize` work correctly
+- Added a dedicated AI-pipe prompt format with explicit `<command-output>` markers so short or simple piped text like `echo "hello" | @summarize` is handled reliably
+
+---
+
 ## 0.1.2 -- 2026-03-12
 
 ### AI pipe (`cmd | @question`)

@@ -28,8 +28,20 @@ impl Executor {
     }
 
     pub fn execute_pipeline(&mut self, pipeline: &Pipeline) -> CommandOutput {
+        self.execute_pipeline_with_capture_mode(pipeline, false)
+    }
+
+    pub fn execute_pipeline_captured(&mut self, pipeline: &Pipeline) -> CommandOutput {
+        self.execute_pipeline_with_capture_mode(pipeline, true)
+    }
+
+    fn execute_pipeline_with_capture_mode(
+        &mut self,
+        pipeline: &Pipeline,
+        force_capture: bool,
+    ) -> CommandOutput {
         if pipeline.commands.len() == 1 {
-            return self.execute_single(&pipeline.commands[0]);
+            return self.execute_single_with_capture_mode(&pipeline.commands[0], force_capture);
         }
 
         let mut input_data: Option<Vec<u8>> = None;
@@ -37,7 +49,8 @@ impl Executor {
 
         for (i, cmd) in pipeline.commands.iter().enumerate() {
             let is_last = i == pipeline.commands.len() - 1;
-            last_output = self.execute_piped(cmd, input_data.as_deref(), is_last);
+            last_output =
+                self.execute_piped_with_capture_mode(cmd, input_data.as_deref(), is_last, force_capture);
 
             if last_output.exit_code != 0 {
                 break;
@@ -50,7 +63,11 @@ impl Executor {
         last_output
     }
 
-    fn execute_single(&mut self, cmd: &ParsedCommand) -> CommandOutput {
+    fn execute_single_with_capture_mode(
+        &mut self,
+        cmd: &ParsedCommand,
+        force_capture: bool,
+    ) -> CommandOutput {
         if let Some(output) = self.try_shell_builtin(cmd) {
             return output;
         }
@@ -68,14 +85,15 @@ impl Executor {
             return output;
         }
 
-        self.execute_external(cmd, None)
+        self.execute_external(cmd, None, force_capture)
     }
 
-    fn execute_piped(
+    fn execute_piped_with_capture_mode(
         &mut self,
         cmd: &ParsedCommand,
         stdin_data: Option<&[u8]>,
         _is_last: bool,
+        force_capture: bool,
     ) -> CommandOutput {
         let builtins = builtin_commands();
         if let Some(builtin_fn) = builtins.get(cmd.program.as_str()) {
@@ -96,7 +114,7 @@ impl Executor {
             return output;
         }
 
-        self.execute_external(cmd, stdin_data)
+        self.execute_external(cmd, stdin_data, force_capture)
     }
 
     fn is_interactive(program: &str) -> bool {
@@ -131,8 +149,13 @@ impl Executor {
         true
     }
 
-    fn execute_external(&mut self, cmd: &ParsedCommand, stdin_data: Option<&[u8]>) -> CommandOutput {
-        if self.needs_interactive(cmd, stdin_data) {
+    fn execute_external(
+        &mut self,
+        cmd: &ParsedCommand,
+        stdin_data: Option<&[u8]>,
+        force_capture: bool,
+    ) -> CommandOutput {
+        if !force_capture && self.needs_interactive(cmd, stdin_data) {
             return self.execute_interactive_piped(cmd, stdin_data);
         }
 
@@ -321,6 +344,7 @@ impl Executor {
                     "  cd <dir>          Change directory\n",
                     "  export KEY=VALUE  Set environment variable\n",
                     "  clear             Clear the screen\n",
+                    "  sanitize          Clear AI conversation context\n",
                     "  history           Show command history\n",
                     "  help              Show this help message\n",
                     "  exit / quit       Exit the shell\n\n",

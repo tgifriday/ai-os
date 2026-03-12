@@ -1,7 +1,7 @@
 use std::path::Path;
 
 const SHELL_BUILTINS: &[&str] = &[
-    "cd", "clear", "exit", "export", "help", "history", "llm", "quit",
+    "cd", "clear", "exit", "export", "help", "history", "llm", "quit", "sanitize",
 ];
 
 pub fn get_completions(line: &str, cwd: &Path) -> Vec<String> {

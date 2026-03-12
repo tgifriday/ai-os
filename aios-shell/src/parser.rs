@@ -160,6 +160,7 @@ fn is_known_command(cmd: &str) -> bool {
     if matches!(
         cmd,
         "clear"
+            | "sanitize"
             | "history"
             | "help"
             | "man"

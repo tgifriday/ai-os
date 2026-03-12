@@ -279,6 +279,12 @@ impl ShellRouter {
             InputClassification::Exit => HandleResult::Exit,
 
             InputClassification::DirectCommand(pipeline) => {
+                if let Some(output) = self.try_router_builtin(&pipeline) {
+                    self.print_output(&output);
+                    self.record_history(input, output.exit_code);
+                    return HandleResult::Continue;
+                }
+
                 let output = self.executor.execute_pipeline(&pipeline);
 
                 match self.mode {
@@ -326,6 +332,12 @@ impl ShellRouter {
             }
 
             InputClassification::Ambiguous(_text, pipeline) => {
+                if let Some(output) = self.try_router_builtin(&pipeline) {
+                    self.print_output(&output);
+                    self.record_history(input, output.exit_code);
+                    return HandleResult::Continue;
+                }
+
                 let output = self.executor.execute_pipeline(&pipeline);
 
                 match self.mode {
@@ -362,7 +374,7 @@ impl ShellRouter {
             }
 
             InputClassification::AiPipe(pipeline, action) => {
-                let output = self.executor.execute_pipeline(&pipeline);
+                let output = self.executor.execute_pipeline_captured(&pipeline);
                 if !output.stdout.is_empty() {
                     print!("{}", output.stdout);
                 }
@@ -375,13 +387,7 @@ impl ShellRouter {
                     );
                 } else {
                     println!("\x1b[90m--- AI analysis ---\x1b[0m");
-                    let prompt = format!(
-                        "The user piped the output of a command and asked: \"{}\"\n\n\
-                         Answer the question directly and concisely based on the output below.\n\n\
-                         Command output:\n```\n{}\n```",
-                        action, output.stdout
-                    );
-                    self.handle_ai_query(&prompt).await;
+                    self.handle_ai_pipe_query(&action, &output.stdout).await;
                 }
                 self.record_history(input, output.exit_code);
                 HandleResult::Continue
@@ -411,6 +417,12 @@ impl ShellRouter {
                 parser::InputClassification::Empty => {}
                 parser::InputClassification::DirectCommand(pipeline)
                 | parser::InputClassification::Ambiguous(_, pipeline) => {
+                    if let Some(output) = self.try_router_builtin(pipeline) {
+                        last_exit = output.exit_code;
+                        self.print_output(&output);
+                        continue;
+                    }
+
                     let output = self.executor.execute_pipeline(pipeline);
                     last_exit = output.exit_code;
                     if output.exit_code == 127 {
@@ -430,7 +442,7 @@ impl ShellRouter {
                     last_exit = self.executor.last_exit_code;
                 }
                 parser::InputClassification::AiPipe(pipeline, action) => {
-                    let output = self.executor.execute_pipeline(pipeline);
+                    let output = self.executor.execute_pipeline_captured(pipeline);
                     last_exit = output.exit_code;
                     if !output.stdout.is_empty() {
                         print!("{}", output.stdout);
@@ -444,19 +456,31 @@ impl ShellRouter {
                         );
                     } else {
                         println!("\x1b[90m--- AI analysis ---\x1b[0m");
-                        let prompt = format!(
-                            "The user piped the output of a command and asked: \"{}\"\n\n\
-                             Answer the question directly and concisely based on the output below.\n\n\
-                             Command output:\n```\n{}\n```",
-                            action, output.stdout
-                        );
-                        self.handle_ai_query(&prompt).await;
+                        self.handle_ai_pipe_query(action, &output.stdout).await;
                     }
                 }
             }
         }
         self.record_history(original_input, last_exit);
         HandleResult::Continue
+    }
+
+    fn try_router_builtin(&mut self, pipeline: &parser::Pipeline) -> Option<CommandOutput> {
+        if pipeline.commands.len() != 1 {
+            return None;
+        }
+
+        let cmd = &pipeline.commands[0];
+        match cmd.program.as_str() {
+            "sanitize" => {
+                self.conversation_history.clear();
+                self.executor.last_exit_code = 0;
+                Some(CommandOutput::success(
+                    "AI context cleared. Future @queries start fresh.\n".to_string(),
+                ))
+            }
+            _ => None,
+        }
     }
 
     async fn handle_command_not_found(&mut self, original_input: &str, output: &CommandOutput) {
@@ -661,6 +685,64 @@ impl ShellRouter {
     }
 
     async fn handle_ai_query(&mut self, query: &str) {
+        self.handle_ai_query_with_options(query, true, true, true).await;
+    }
+
+    async fn handle_ai_pipe_query(&mut self, action: &str, output: &str) {
+        let trimmed_output = output.trim_end();
+        if trimmed_output.is_empty() {
+            eprintln!("\x1b[33mNo command output was captured to analyze.\x1b[0m");
+            return;
+        }
+
+        let os_state = self.build_os_state();
+        let mut system_prompt = self.context_manager.build_system_prompt(&os_state);
+        system_prompt.push_str(
+            "\n\nAI pipe mode rules:\n\
+             - You are analyzing literal command output captured from the shell.\n\
+             - The text inside <command-output>...</command-output> is the exact output.\n\
+             - Never claim there was no output if those tags contain text.\n\
+             - Do not ask the user to rerun the command when output is already provided.\n\
+             - Answer only from the provided command output.\n\
+             - If the user asks to summarize, summarize the output even if it is short.\n\
+             - Be concise and directly answer the user's request."
+        );
+
+        let request = CompletionRequest {
+            system_prompt: Some(system_prompt),
+            messages: vec![Message {
+                role: MessageRole::User,
+                content: format!(
+                    "User request: {}\n\n<command-output>\n{}\n</command-output>",
+                    action, trimmed_output
+                ),
+            }],
+            max_tokens: Some(1024),
+            temperature: Some(0.3),
+            stream: false,
+        };
+
+        if let Some(ref router) = self.llm_router {
+            match router.complete(request).await {
+                Ok(response) => {
+                    println!("\x1b[36m{}\x1b[0m", response.content);
+                }
+                Err(e) => {
+                    eprintln!("\x1b[31mAI error: {}\x1b[0m", e);
+                }
+            }
+        } else {
+            eprintln!("\x1b[90mNo AI backend configured. Edit config/llm.toml to enable one.\x1b[0m");
+        }
+    }
+
+    async fn handle_ai_query_with_options(
+        &mut self,
+        query: &str,
+        include_history: bool,
+        include_directory_context: bool,
+        persist_history: bool,
+    ) {
         let knowledge_context = self.knowledge.query_for_context(query);
 
         let os_state = self.build_os_state();
@@ -670,20 +752,26 @@ impl ShellRouter {
             system_prompt.push_str(&knowledge_context);
         }
 
-        let augmented_query = self.build_directory_prompt(query);
+        let augmented_query = if include_directory_context {
+            self.build_directory_prompt(query)
+        } else {
+            query.to_string()
+        };
 
-        self.conversation_history.push(Message {
+        let mut messages = if include_history {
+            self.conversation_history.clone()
+        } else {
+            Vec::new()
+        };
+
+        messages.push(Message {
             role: MessageRole::User,
             content: augmented_query.clone(),
         });
 
-        if self.conversation_history.len() > self.max_conversation_history {
-            self.conversation_history.remove(0);
-        }
-
         let request = CompletionRequest {
             system_prompt: Some(system_prompt),
-            messages: self.conversation_history.clone(),
+            messages,
             max_tokens: Some(2048),
             temperature: Some(0.7),
             stream: false,
@@ -693,10 +781,19 @@ impl ShellRouter {
             match router.complete(request).await {
                 Ok(response) => {
                     println!("\x1b[36m{}\x1b[0m", response.content);
-                    self.conversation_history.push(Message {
-                        role: MessageRole::Assistant,
-                        content: response.content,
-                    });
+                    if persist_history {
+                        self.conversation_history.push(Message {
+                            role: MessageRole::User,
+                            content: augmented_query,
+                        });
+                        self.conversation_history.push(Message {
+                            role: MessageRole::Assistant,
+                            content: response.content,
+                        });
+                        while self.conversation_history.len() > self.max_conversation_history {
+                            self.conversation_history.remove(0);
+                        }
+                    }
                 }
                 Err(e) => {
                     eprintln!("\x1b[31mAI error: {}\x1b[0m", e);
@@ -903,6 +1000,7 @@ impl ShellRouter {
                 "ls", "cat", "cp", "mv", "rm", "mkdir", "rmdir", "grep", "find", "wc", "head",
                 "tail", "ps", "kill", "top", "echo", "env", "pwd", "chmod", "df", "du", "date",
                 "uptime", "whoami", "hostname", "cd", "export", "clear", "help",
+                "sanitize",
             ]
             .into_iter()
             .map(String::from)
