@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.2 -- 2026-03-12
+
+### AI pipe (`cmd | @question`)
+
+- `ls -al | @what's the largest file` now shows the command output **first**, then the AI's analysis below a separator
+- Previously, piped output was silently captured and only sent to the AI -- the user never saw it
+- Improved AI prompt: asks the LLM to answer the user's question directly and concisely rather than giving generic advice
+- Handles errors gracefully: command-not-found triggers investigation; non-zero exit with no output warns the user
+
+---
+
 ## 0.1.1 -- 2026-03-12
 
 ### Shell plumbing -- glob, chaining, command substitution

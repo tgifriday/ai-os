@@ -363,11 +363,22 @@ impl ShellRouter {
 
             InputClassification::AiPipe(pipeline, action) => {
                 let output = self.executor.execute_pipeline(&pipeline);
+                if !output.stdout.is_empty() {
+                    print!("{}", output.stdout);
+                }
                 if output.exit_code != 0 && output.exit_code == 127 {
                     self.handle_command_not_found(input, &output).await;
+                } else if output.exit_code != 0 && output.stdout.is_empty() {
+                    eprintln!(
+                        "\x1b[33mCommand exited with code {} and produced no output.\x1b[0m",
+                        output.exit_code
+                    );
                 } else {
+                    println!("\x1b[90m--- AI analysis ---\x1b[0m");
                     let prompt = format!(
-                        "The user ran a command and wants you to '{}' the output.\n\nCommand output:\n```\n{}\n```",
+                        "The user piped the output of a command and asked: \"{}\"\n\n\
+                         Answer the question directly and concisely based on the output below.\n\n\
+                         Command output:\n```\n{}\n```",
                         action, output.stdout
                     );
                     self.handle_ai_query(&prompt).await;
@@ -421,11 +432,22 @@ impl ShellRouter {
                 parser::InputClassification::AiPipe(pipeline, action) => {
                     let output = self.executor.execute_pipeline(pipeline);
                     last_exit = output.exit_code;
+                    if !output.stdout.is_empty() {
+                        print!("{}", output.stdout);
+                    }
                     if output.exit_code == 127 {
                         self.handle_command_not_found(segment, &output).await;
+                    } else if output.exit_code != 0 && output.stdout.is_empty() {
+                        eprintln!(
+                            "\x1b[33mCommand exited with code {} and produced no output.\x1b[0m",
+                            output.exit_code
+                        );
                     } else {
+                        println!("\x1b[90m--- AI analysis ---\x1b[0m");
                         let prompt = format!(
-                            "The user ran a command and wants you to '{}' the output.\n\nCommand output:\n```\n{}\n```",
+                            "The user piped the output of a command and asked: \"{}\"\n\n\
+                             Answer the question directly and concisely based on the output below.\n\n\
+                             Command output:\n```\n{}\n```",
                             action, output.stdout
                         );
                         self.handle_ai_query(&prompt).await;
