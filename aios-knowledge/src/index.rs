@@ -448,58 +448,72 @@ impl KnowledgeIndex {
         self.concept(
             "aios-overview",
             "AIOS Overview",
-            "AIOS (AI Operating System) is an AI-native operating system written entirely in Rust. \
-             It combines a Unix-like userland with deep LLM integration, giving every command, \
-             pipe, and shell session first-class access to AI capabilities.\n\n\
-             Architecture layers:\n  \
-             1. aios-kernel — Core kernel with VFS, process scheduler, memory management, and IPC\n  \
-             2. aios-shell — Interactive shell supporting natural language, @ AI prefix, and AI pipes\n  \
-             3. aios-core — Shared types, configuration, and cross-crate utilities\n  \
-             4. aios-llm — Pluggable LLM backend (local, network, or cloud)\n  \
-             5. aios-knowledge — Embedded knowledge base with search (this crate)\n  \
-             6. aios-commands — Built-in command implementations\n  \
-             7. aios-ai — AI agent, prompt construction, and tool-use orchestration\n\n\
-             AIOS boots into a fully interactive shell where users can mix traditional commands \
-             with natural language queries. The OS is self-aware: it can introspect its own \
-             documentation, suggest commands, explain errors, and learn from user patterns.",
-            &["architecture", "overview", "system", "rust", "ai", "operating system"],
+            "AIOS is an AI-powered shell replacement written in Rust. The primary binary is \
+             `aish` (AI Shell), a drop-in shell that passes all commands to the native OS and \
+             uses AI as a universal fallback for errors, unknown commands, and natural language \
+             questions.\n\n\
+             There are two binaries:\n  \
+             - `aish` — The AI shell for daily use. All commands pass through to the host OS. \
+             AI catches failures and helps the user.\n  \
+             - `aios-os` — An experimental OS layer where commands are handled by built-in Rust \
+             reimplementations instead of host executables.\n\n\
+             Workspace crates:\n  \
+             1. aios-shell — Shell binary, input loop, tab completion, executor, router\n  \
+             2. aios-llm — Pluggable LLM backends (Ollama, OpenAI, Anthropic) with live switching\n  \
+             3. aios-knowledge — Embedded TF-IDF knowledge base for offline context\n  \
+             4. aios-core — Shared types, built-in command implementations, flag parsing\n  \
+             5. aios-kernel — System call wrappers (used by aios-os)\n  \
+             6. aios-init — Init/boot logic (used by aios-os)\n\n\
+             Configure AI via ~/.config/aios/llm.yml (or .toml / .json). \
+             Switch LLM backends live with `llm use <backend> [model]`.",
+            &["architecture", "overview", "system", "rust", "ai", "aios", "aish", "shell"],
         );
 
         self.concept(
             "llm-config",
             "LLM Configuration",
-            "AIOS supports three LLM backends, configured in the system config file or via \
-             environment variables.\n\n\
-             1. Local — Runs a quantized model on-device via a built-in inference runtime. \
-             Best for privacy and offline usage. Set LLM_BACKEND=local and LLM_MODEL_PATH to \
-             the model file.\n\n\
-             2. Network — Connects to a LLM server on the local network (e.g., Ollama, vLLM). \
-             Set LLM_BACKEND=network and LLM_ENDPOINT to the server URL.\n\n\
-             3. Cloud — Uses a cloud API (OpenAI-compatible). Set LLM_BACKEND=cloud, \
-             LLM_ENDPOINT to the API base URL, and LLM_API_KEY to your key.\n\n\
-             The active backend can be queried with `llm status` and switched at runtime with \
-             `llm use <backend>`. Temperature, max tokens, and system prompt are adjustable via \
-             `llm config set <key> <value>`.",
-            &["llm", "model", "config", "local", "cloud", "network", "ai", "inference"],
+            "aish supports pluggable LLM backends configured in ~/.config/aios/llm.yml \
+             (also accepts .toml or .json).\n\n\
+             Backends:\n  \
+             1. Ollama — Local or LAN model server. Set endpoint and model name.\n  \
+             2. OpenAI — GPT-4o and compatible models via API key.\n  \
+             3. Anthropic — Claude models via API key.\n  \
+             4. Local GGUF — Placeholder for llama-cpp-rs integration.\n\n\
+             Each backend has enabled: true/false, priority (lower = preferred), endpoint, \
+             model, and optional api_key.\n\n\
+             Live switching (no restart):\n  \
+             `llm` — show current status\n  \
+             `llm use ollama [model]` — switch to Ollama\n  \
+             `llm use openai [model]` — switch to OpenAI\n  \
+             `llm use anthropic [model]` — switch to Anthropic\n  \
+             `llm model <name>` — change model on active backend\n  \
+             `llm reload` — re-read config file from disk\n  \
+             `llm off` — disable AI entirely",
+            &["llm", "model", "config", "ollama", "openai", "anthropic", "cloud", "ai"],
         );
 
         self.concept(
             "ai-shell",
             "AI Shell Usage",
-            "The AIOS shell extends a traditional Unix shell with AI capabilities.\n\n\
-             @ Prefix — Typing @ followed by a natural language request invokes the AI agent. \
-             Example: `@ list all rust files larger than 1MB` translates to an appropriate \
-             command and executes it after confirmation.\n\n\
-             AI Pipes — The special `|ai` pipe sends command output to the LLM for \
-             summarization, transformation, or analysis. Example: `ps -aux |ai summarize \
-             top CPU consumers`.\n\n\
-             Conversational Mode — Press Ctrl+A to toggle conversational mode, where every \
-             line is treated as a natural language prompt instead of a shell command.\n\n\
-             AI Explain — Append `--explain` to any command to get a plain-English explanation \
-             of what it does before running it.\n\n\
-             The AI has access to the knowledge base, so it can answer questions about AIOS \
-             itself, Unix concepts, and the user's environment.",
-            &["shell", "ai", "natural language", "prefix", "pipe", "agent", "explain"],
+            "aish (AI Shell) is a drop-in shell replacement. All OS commands pass through \
+             natively. AI activates in three situations:\n\n\
+             1. @query — Type @ followed by a question to ask the AI directly.\n   \
+             Example: `@what is the disk usage on this machine`\n   \
+             The AI sees your current directory listing for context.\n\n\
+             2. cmd | @question — Pipe command output to the AI for analysis.\n   \
+             Example: `ls -al | @what's the largest file`\n   \
+             The command output is shown, then the AI answers the question.\n\n\
+             3. Fallback — When a command fails or is not found, the AI investigates \
+             (checks PATH, similar commands, package managers) and suggests fixes.\n\n\
+             Natural language input that doesn't match a known command is automatically \
+             routed to the AI.\n\n\
+             LLM control (no restart needed):\n  \
+             `llm` — show current backend/model\n  \
+             `llm use <backend> [model]` — switch backend (ollama, openai, anthropic)\n  \
+             `llm model <name>` — change model\n  \
+             `llm reload` — re-read config from disk\n  \
+             `llm off` — disable AI",
+            &["shell", "ai", "natural language", "prefix", "pipe", "query", "aish"],
         );
 
         self.concept(
@@ -575,31 +589,29 @@ impl KnowledgeIndex {
              Stderr redirect ( 2> ) — Redirect error output.\n  \
              Example: cmd 2> errors.log\n\n\
              Combine: cmd > out.log 2>&1  — merge stderr into stdout file.\n\n\
-             AI pipe ( |ai ) — AIOS extension that sends output to the LLM for processing.\n  \
-             Example: cat log.txt |ai summarize the errors",
+             AI pipe ( | @ ) — aish extension that sends output to the LLM for analysis.\n  \
+             Example: cat log.txt | @summarize the errors",
             &["pipe", "redirect", "stdin", "stdout", "stderr", "stream", "output", "input"],
         );
 
         self.concept(
             "shell-scripting",
-            "Shell Scripting",
-            "AIOS supports shell scripts in .aios files. Scripts are sequences of commands \
-             executed in order.\n\n\
-             Basic structure:\n  #!/usr/bin/env aios-shell\n  \
-             # This is a comment\n  \
-             echo \"Starting build...\"\n  \
-             mkdir -p build\n  \
-             cp src/*.rs build/\n  \
-             echo \"Done.\"\n\n\
-             Variables: name=\"world\" then echo \"Hello $name\"\n\
-             Conditionals: if [ -f file.txt ]; then echo exists; fi\n\
-             Loops: for f in *.txt; do echo $f; done\n\
-             Exit codes: every command returns 0 for success, non-zero for failure.\n  \
-             Use && to chain (run next only if previous succeeded).\n  \
-             Use || for fallback (run next only if previous failed).\n\n\
-             AI integration in scripts: use `@ <prompt>` lines to invoke the AI agent \
-             inline. The agent's output becomes the command that runs next.",
-            &["script", "automation", "batch", "aios", "shell", "programming", "loop", "if"],
+            "Shell Scripting and Chaining",
+            "aish supports command chaining and shell plumbing.\n\n\
+             Chaining operators:\n  \
+             cmd1 ; cmd2       — run cmd2 regardless of cmd1's exit code\n  \
+             cmd1 && cmd2      — run cmd2 only if cmd1 succeeded (exit 0)\n  \
+             cmd1 || cmd2      — run cmd2 only if cmd1 failed (non-zero exit)\n\n\
+             Glob expansion: *, ?, [...] patterns expand to matching files.\n  \
+             Example: ls *.rs, du -sh ./*\n  \
+             Quoted globs are passed literally: grep \"*.txt\" file\n\n\
+             Command substitution: $(cmd) or `cmd` expands inline.\n  \
+             Example: echo $(date), export VER=$(git rev-parse HEAD)\n\n\
+             Pipes: cmd1 | cmd2 | cmd3\n\
+             Redirects: > (overwrite), >> (append), < (input)\n\n\
+             Exit codes: 0 = success, non-zero = failure. Signal-killed processes \
+             report standard codes (e.g., 130 for Ctrl-C / SIGINT).",
+            &["script", "chaining", "glob", "substitution", "pipe", "redirect", "shell"],
         );
     }
 }

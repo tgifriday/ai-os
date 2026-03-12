@@ -9,6 +9,20 @@
 - Improved AI prompt: asks the LLM to answer the user's question directly and concisely rather than giving generic advice
 - Handles errors gracefully: command-not-found triggers investigation; non-zero exit with no output warns the user
 
+### Knowledge base accuracy
+
+- Rewrote `aios-overview` concept to reflect actual 6-crate workspace and dual-binary (`aish` / `aios-os`) architecture
+- Rewrote `ai-shell` concept to document real features (`@query`, `| @question`, fallback mode) instead of non-existent ones (`|ai`, `Ctrl+A`, `--explain`)
+- Updated `llm-config` concept with actual backend names (Ollama, OpenAI, Anthropic) and `llm use/model/reload/off` commands
+- Updated `pipes-redirects` to use `| @` syntax instead of `|ai`
+- Replaced `shell-scripting` concept with accurate chaining/glob/substitution documentation
+
+### System prompt improvements
+
+- AI no longer suggests random commands for informational questions (e.g., `man hostname` when asked about AIOS)
+- Prompt now instructs: "Only suggest a command when it directly answers what the user asked"
+- Added instruction to answer from knowledge context when asked about aish/AIOS itself
+
 ---
 
 ## 0.1.1 -- 2026-03-12
