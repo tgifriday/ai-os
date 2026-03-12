@@ -87,6 +87,7 @@ fn print_banner(has_ai: bool) {
 
 #[tokio::main]
 async fn main() {
+    #[cfg(unix)]
     unsafe {
         libc::signal(libc::SIGINT, libc::SIG_IGN);
         libc::signal(libc::SIGQUIT, libc::SIG_IGN);

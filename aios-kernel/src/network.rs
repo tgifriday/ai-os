@@ -5,6 +5,7 @@ use thiserror::Error;
 pub enum NetworkError {
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
+    #[cfg(unix)]
     #[error("nix error: {0}")]
     Nix(#[from] nix::Error),
 }
@@ -18,6 +19,7 @@ pub struct NetworkInterface {
     pub tx_packets: u64,
 }
 
+#[cfg(unix)]
 pub fn list_interfaces() -> Result<Vec<NetworkInterface>, NetworkError> {
     if let Ok(content) = std::fs::read_to_string("/proc/net/dev") {
         return list_interfaces_linux(&content);
@@ -40,6 +42,7 @@ pub fn list_interfaces() -> Result<Vec<NetworkInterface>, NetworkError> {
     }
 }
 
+#[cfg(unix)]
 fn list_interfaces_linux(content: &str) -> Result<Vec<NetworkInterface>, NetworkError> {
     let mut interfaces = Vec::new();
 
@@ -127,9 +130,22 @@ fn list_interfaces_macos() -> Result<Vec<NetworkInterface>, NetworkError> {
     Ok(interfaces)
 }
 
+#[cfg(unix)]
 pub fn get_hostname() -> String {
     nix::unistd::gethostname()
         .ok()
         .and_then(|h| h.into_string().ok())
         .unwrap_or_else(|| "unknown".to_string())
+}
+
+#[cfg(not(unix))]
+pub fn get_hostname() -> String {
+    std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .unwrap_or_else(|_| "unknown".to_string())
+}
+
+#[cfg(not(unix))]
+pub fn list_interfaces() -> Result<Vec<NetworkInterface>, NetworkError> {
+    Ok(Vec::new())
 }

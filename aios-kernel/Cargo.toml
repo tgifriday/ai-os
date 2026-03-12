@@ -7,8 +7,10 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-nix = { version = "0.29", features = ["fs", "process", "signal", "net", "mount", "hostname"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.29", features = ["fs", "process", "signal", "net", "mount", "hostname"] }

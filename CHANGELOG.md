@@ -2,6 +2,15 @@
 
 ## 0.1.3 -- 2026-03-12
 
+### Release workflow and Windows compatibility
+
+- Added `.github/workflows/release.yml` -- push a `v*` tag and GitHub Actions builds release binaries for all platforms
+- Targets: macOS (Intel + Apple Silicon), Linux (x86_64 + ARM64 + musl), Windows (x86_64 + ARM64)
+- Each release includes `aish`, `aios-os`, default config, licenses, and README in a tarball (Unix) or zip (Windows)
+- Added `#[cfg(unix)]` / `#[cfg(not(unix))]` guards to all Unix-specific code (`libc`, `nix`, `pre_exec`, signal handling, `MetadataExt`)
+- `nix` and `libc` are now Unix-only dependencies via `[target.'cfg(unix)'.dependencies]`
+- Windows builds compile with stub fallbacks for signal handling, process management, filesystem metadata, disk usage, and hostname
+
 ### AI context control
 
 - Added `sanitize` builtin to clear the AI conversation context without affecting shell history, cwd, env vars, or LLM configuration

@@ -1,8 +1,13 @@
+#[cfg(unix)]
 use nix::sys::signal::{self, Signal};
+#[cfg(unix)]
 use nix::sys::wait::{self, WaitStatus};
+#[cfg(unix)]
 use nix::unistd::{self, ForkResult, Pid};
 use serde::{Deserialize, Serialize};
+#[cfg(unix)]
 use std::ffi::CString;
+#[cfg(unix)]
 use std::path::Path;
 use thiserror::Error;
 
@@ -31,6 +36,7 @@ pub struct ProcessInfo {
     pub command: String,
 }
 
+#[cfg(unix)]
 pub fn fork_and_exec(program: &str, args: &[&str]) -> Result<i32, ProcessError> {
     let c_program = CString::new(program).map_err(|_| ProcessError::InvalidPath(program.to_string()))?;
 
@@ -49,6 +55,7 @@ pub fn fork_and_exec(program: &str, args: &[&str]) -> Result<i32, ProcessError> 
     }
 }
 
+#[cfg(unix)]
 pub fn wait_for_pid(pid: i32) -> Result<i32, ProcessError> {
     let pid = Pid::from_raw(pid);
     match wait::waitpid(pid, None)? {
@@ -58,12 +65,14 @@ pub fn wait_for_pid(pid: i32) -> Result<i32, ProcessError> {
     }
 }
 
+#[cfg(unix)]
 pub fn send_signal(pid: i32, sig: i32) -> Result<(), ProcessError> {
     let signal = Signal::try_from(sig).map_err(|e| ProcessError::ExecFailed(e.to_string()))?;
     signal::kill(Pid::from_raw(pid), signal)?;
     Ok(())
 }
 
+#[cfg(unix)]
 pub fn list_processes() -> Result<Vec<ProcessInfo>, ProcessError> {
     let proc_dir = Path::new("/proc");
     if proc_dir.exists() {
@@ -81,6 +90,7 @@ pub fn list_processes() -> Result<Vec<ProcessInfo>, ProcessError> {
     }
 }
 
+#[cfg(unix)]
 fn list_processes_linux() -> Result<Vec<ProcessInfo>, ProcessError> {
     let mut processes = Vec::new();
     let proc_dir = Path::new("/proc");
@@ -145,6 +155,7 @@ fn list_processes_macos() -> Result<Vec<ProcessInfo>, ProcessError> {
     Ok(processes)
 }
 
+#[cfg(unix)]
 fn read_process_info(pid: i32) -> Result<ProcessInfo, ProcessError> {
     let stat_path = format!("/proc/{}/stat", pid);
     let stat_content = std::fs::read_to_string(&stat_path)?;
@@ -197,10 +208,42 @@ fn read_process_info(pid: i32) -> Result<ProcessInfo, ProcessError> {
     })
 }
 
+#[cfg(unix)]
 pub fn get_current_pid() -> i32 {
     unistd::getpid().as_raw()
 }
 
+#[cfg(unix)]
 pub fn get_parent_pid() -> i32 {
     unistd::getppid().as_raw()
+}
+
+#[cfg(not(unix))]
+pub fn fork_and_exec(_program: &str, _args: &[&str]) -> Result<i32, ProcessError> {
+    Err(ProcessError::ExecFailed("fork not supported on this platform".to_string()))
+}
+
+#[cfg(not(unix))]
+pub fn wait_for_pid(_pid: i32) -> Result<i32, ProcessError> {
+    Err(ProcessError::NotFound(_pid))
+}
+
+#[cfg(not(unix))]
+pub fn send_signal(_pid: i32, _sig: i32) -> Result<(), ProcessError> {
+    Err(ProcessError::ExecFailed("signals not supported on this platform".to_string()))
+}
+
+#[cfg(not(unix))]
+pub fn list_processes() -> Result<Vec<ProcessInfo>, ProcessError> {
+    Ok(Vec::new())
+}
+
+#[cfg(not(unix))]
+pub fn get_current_pid() -> i32 {
+    std::process::id() as i32
+}
+
+#[cfg(not(unix))]
+pub fn get_parent_pid() -> i32 {
+    0
 }

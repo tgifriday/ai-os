@@ -3,6 +3,7 @@ use aios_core::commands::builtin_commands;
 use aios_core::CommandOutput;
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
+#[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -164,6 +165,7 @@ impl Executor {
         process.current_dir(&self.cwd);
         process.envs(&self.env_vars);
 
+        #[cfg(unix)]
         unsafe {
             process.pre_exec(|| {
                 libc::signal(libc::SIGINT, libc::SIG_DFL);
@@ -245,6 +247,7 @@ impl Executor {
         process.stdout(Stdio::inherit());
         process.stderr(Stdio::inherit());
 
+        #[cfg(unix)]
         unsafe {
             process.pre_exec(|| {
                 libc::signal(libc::SIGINT, libc::SIG_DFL);
@@ -386,9 +389,12 @@ fn exit_code_from_status(status: &std::process::ExitStatus) -> i32 {
     if let Some(code) = status.code() {
         return code;
     }
-    use std::os::unix::process::ExitStatusExt;
-    if let Some(sig) = status.signal() {
-        return 128 + sig;
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(sig) = status.signal() {
+            return 128 + sig;
+        }
     }
     -1
 }
