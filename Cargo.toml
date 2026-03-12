@@ -13,7 +13,7 @@ resolver = "2"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/tgif/aios"
+repository = "https://github.com/tgifriday/ai-os"
 
 [workspace.dependencies]
 tokio = { version = "1", features = ["full"] }

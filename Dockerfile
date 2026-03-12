@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /aios/target/release/aios-shell /usr/local/bin/aios-shell
+COPY --from=builder /aios/target/release/aish /usr/local/bin/aish
 COPY --from=builder /aios/target/release/aios-init /usr/local/bin/aios-init
 COPY config/ /etc/aios/
 
@@ -26,4 +26,4 @@ RUN mkdir -p /var/aios/models
 ENV TERM=xterm-256color
 ENV RUST_LOG=info
 
-ENTRYPOINT ["/usr/local/bin/aios-shell"]
+ENTRYPOINT ["/usr/local/bin/aish"]

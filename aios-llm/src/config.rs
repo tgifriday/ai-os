@@ -95,7 +95,16 @@ fn default_network_model() -> String {
 impl LlmConfig {
     pub fn load(path: &Path) -> Result<Self> {
         let content = std::fs::read_to_string(path)?;
-        let config: Self = toml::from_str(&content)?;
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        let config: Self = match ext.as_str() {
+            "yaml" | "yml" => serde_yaml::from_str(&content)?,
+            "json" => serde_json::from_str(&content)?,
+            _ => toml::from_str(&content)?,
+        };
         Ok(config)
     }
 }

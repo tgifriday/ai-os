@@ -18,18 +18,27 @@ use aios_llm::network::NetworkBackend;
 use aios_llm::LlmRouter;
 
 fn load_llm_config() -> LlmConfig {
-    let config_paths = [
-        std::path::PathBuf::from("config/llm.toml"),
-        std::path::PathBuf::from("/etc/aios/llm.toml"),
-        dirs::home_dir()
-            .unwrap_or_default()
-            .join(".config/aios/llm.toml"),
-    ];
-
-    config_paths
+    llm_config_search_paths()
         .iter()
         .find_map(|p| LlmConfig::load(p).ok())
         .unwrap_or_default()
+}
+
+fn llm_config_search_paths() -> Vec<std::path::PathBuf> {
+    let dirs = [
+        Some(std::path::PathBuf::from("config")),
+        Some(std::path::PathBuf::from("/etc/aios")),
+        dirs::home_dir().map(|h| h.join(".config/aios")),
+    ];
+    let extensions = ["toml", "yaml", "yml", "json"];
+
+    let mut paths = Vec::new();
+    for dir in dirs.iter().flatten() {
+        for ext in &extensions {
+            paths.push(dir.join(format!("llm.{}", ext)));
+        }
+    }
+    paths
 }
 
 fn build_llm_router(config: &LlmConfig) -> LlmRouter {
@@ -78,6 +87,12 @@ fn print_banner(has_ai: bool) {
 
 #[tokio::main]
 async fn main() {
+    unsafe {
+        libc::signal(libc::SIGINT, libc::SIG_IGN);
+        libc::signal(libc::SIGQUIT, libc::SIG_IGN);
+        libc::signal(libc::SIGTSTP, libc::SIG_IGN);
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
@@ -358,26 +373,35 @@ fn read_line_raw(
                 } => {
                     let completions =
                         completion::get_completions(buffer, &shell_router.executor.cwd);
-                    if completions.len() == 1 {
-                        let parts: Vec<&str> = buffer.rsplitn(2, ' ').collect();
-                        if parts.len() == 2 {
-                            *buffer = format!("{} {}", parts[1], completions[0]);
-                        } else {
-                            *buffer = completions[0].clone();
-                            if !buffer.ends_with('/') {
-                                buffer.push(' ');
+                    if completions.is_empty() {
+                        // nothing
+                    } else {
+                        let word_start = buffer.rfind(|c: char| c == ' ' || c == '\t')
+                            .map(|i| i + 1)
+                            .unwrap_or(0);
+                        let prefix = completion::longest_common_prefix(&completions);
+
+                        if completions.len() == 1 {
+                            let mut replacement = completions[0].clone();
+                            if !replacement.ends_with('/') {
+                                replacement.push(' ');
                             }
+                            buffer.replace_range(word_start.., &replacement);
+                            *cursor_pos = buffer.len();
+                            redraw_line(prompt_str, buffer, *cursor_pos);
+                        } else if prefix.len() > buffer[word_start..].len() {
+                            buffer.replace_range(word_start.., &prefix);
+                            *cursor_pos = buffer.len();
+                            redraw_line(prompt_str, buffer, *cursor_pos);
+                        } else {
+                            let width = crossterm::terminal::size()
+                                .map(|(w, _)| w as usize)
+                                .unwrap_or(80);
+                            let display = completion::format_columns(&completions, width);
+                            print!("\r\n{}", display);
+                            print!("{}{}", prompt_str, buffer);
+                            io::stdout().flush().unwrap();
                         }
-                        *cursor_pos = buffer.len();
-                        redraw_line(prompt_str, buffer, *cursor_pos);
-                    } else if completions.len() > 1 {
-                        println!();
-                        for c in &completions {
-                            print!("{}  ", c);
-                        }
-                        println!();
-                        print!("{}{}", prompt_str, buffer);
-                        io::stdout().flush().unwrap();
                     }
                 }
 

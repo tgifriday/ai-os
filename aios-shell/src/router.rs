@@ -106,13 +106,7 @@ impl ShellRouter {
             }
 
             "reload" => {
-                let config_paths = [
-                    std::path::PathBuf::from("config/llm.toml"),
-                    std::path::PathBuf::from("/etc/aios/llm.toml"),
-                    dirs::home_dir()
-                        .unwrap_or_default()
-                        .join(".config/aios/llm.toml"),
-                ];
+                let config_paths = crate::llm_config_search_paths();
 
                 match config_paths.iter().find_map(|p| {
                     LlmConfig::load(p).ok().map(|c| (c, p.clone()))
@@ -272,6 +266,12 @@ impl ShellRouter {
         }
 
         let expanded = parser::expand_variables(input, &self.executor.env_vars);
+
+        let chain = parser::split_chain(&expanded);
+        if chain.len() > 1 {
+            return self.handle_chain(input, chain).await;
+        }
+
         let classification = parser::classify_input(&expanded);
 
         match classification {
@@ -376,6 +376,65 @@ impl ShellRouter {
                 HandleResult::Continue
             }
         }
+    }
+
+    async fn handle_chain(
+        &mut self,
+        original_input: &str,
+        segments: Vec<(String, parser::ChainOp)>,
+    ) -> HandleResult {
+        let mut last_exit = 0i32;
+        for (i, (segment, op)) in segments.iter().enumerate() {
+            if i > 0 {
+                let prev_op = &segments[i - 1].1;
+                match prev_op {
+                    parser::ChainOp::And if last_exit != 0 => continue,
+                    parser::ChainOp::Or if last_exit == 0 => continue,
+                    _ => {}
+                }
+            }
+
+            let classification = parser::classify_input(segment);
+            match &classification {
+                parser::InputClassification::Exit => return HandleResult::Exit,
+                parser::InputClassification::Empty => {}
+                parser::InputClassification::DirectCommand(pipeline)
+                | parser::InputClassification::Ambiguous(_, pipeline) => {
+                    let output = self.executor.execute_pipeline(pipeline);
+                    last_exit = output.exit_code;
+                    if output.exit_code == 127 {
+                        self.handle_command_not_found(segment, &output).await;
+                    } else if output.exit_code != 0 {
+                        self.print_output(&output);
+                    } else {
+                        self.print_output(&output);
+                    }
+                }
+                parser::InputClassification::AiExplicit(query) => {
+                    self.handle_ai_query(query).await;
+                    last_exit = 0;
+                }
+                parser::InputClassification::NaturalLanguage(text) => {
+                    self.handle_natural_language(segment, text).await;
+                    last_exit = self.executor.last_exit_code;
+                }
+                parser::InputClassification::AiPipe(pipeline, action) => {
+                    let output = self.executor.execute_pipeline(pipeline);
+                    last_exit = output.exit_code;
+                    if output.exit_code == 127 {
+                        self.handle_command_not_found(segment, &output).await;
+                    } else {
+                        let prompt = format!(
+                            "The user ran a command and wants you to '{}' the output.\n\nCommand output:\n```\n{}\n```",
+                            action, output.stdout
+                        );
+                        self.handle_ai_query(&prompt).await;
+                    }
+                }
+            }
+        }
+        self.record_history(original_input, last_exit);
+        HandleResult::Continue
     }
 
     async fn handle_command_not_found(&mut self, original_input: &str, output: &CommandOutput) {

@@ -1,0 +1,33 @@
+# aish LLM configuration
+# Uncomment and configure at least one backend to enable AI.
+
+defaults:
+  primary: network
+  fallback:
+    - cloud
+  max_context_tokens: 4096
+  stream_responses: true
+
+# Ollama or any OpenAI-compatible server on your network
+network:
+  enabled: false
+  url: "http://localhost:11434"
+  model: "llama3.1:8b"
+
+# Local GGUF model (planned)
+local:
+  enabled: false
+  model_path: "~/.aios/models/default.gguf"
+  threads: 4
+  gpu_layers: 0
+
+# Cloud providers
+cloud:
+  openai:
+    enabled: false
+    api_key_env: OPENAI_API_KEY
+    model: gpt-4o
+  anthropic:
+    enabled: false
+    api_key_env: ANTHROPIC_API_KEY
+    model: claude-sonnet-4-20250514

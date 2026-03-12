@@ -5,6 +5,10 @@ version.workspace = true
 edition.workspace = true
 
 [[bin]]
+name = "aish"
+path = "src/main.rs"
+
+[[bin]]
 name = "aios-shell"
 path = "src/main.rs"
 
@@ -27,3 +31,5 @@ tracing-subscriber = { workspace = true }
 crossterm = "0.28"
 chrono = { workspace = true }
 dirs = "6"
+glob = "0.3"
+libc = "0.2"

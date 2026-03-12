@@ -1,8 +1,9 @@
 use crate::parser::{ParsedCommand, Pipeline, RedirectTarget};
 use aios_core::commands::builtin_commands;
 use aios_core::CommandOutput;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -98,11 +99,56 @@ impl Executor {
         self.execute_external(cmd, stdin_data)
     }
 
+    fn is_interactive(program: &str) -> bool {
+        static INTERACTIVE: &[&str] = &[
+            "vi", "vim", "nvim", "nano", "pico", "emacs", "micro", "helix", "hx", "kak",
+            "less", "more", "most", "man", "info",
+            "top", "htop", "btop", "atop", "glances", "nmon", "iotop", "nethogs",
+            "ssh", "telnet", "ftp", "sftp",
+            "screen", "tmux", "byobu",
+            "python", "python3", "ipython", "node", "irb", "lua", "ghci", "erl",
+            "mysql", "psql", "sqlite3", "redis-cli", "mongosh",
+            "gdb", "lldb",
+            "nnn", "ranger", "mc", "vifm", "lf",
+            "docker", "kubectl",
+        ];
+        let base = Path::new(program).file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(program);
+        INTERACTIVE.contains(&base)
+    }
+
+    fn needs_interactive(&self, cmd: &ParsedCommand, stdin_data: Option<&[u8]>) -> bool {
+        if cmd.stdout_redirect.is_some() {
+            return false;
+        }
+        if !Self::is_interactive(&cmd.program) {
+            return false;
+        }
+        if stdin_data.is_some() || cmd.stdin_redirect.is_some() {
+            return true; // hybrid: pipe stdin, inherit stdout
+        }
+        true
+    }
+
     fn execute_external(&mut self, cmd: &ParsedCommand, stdin_data: Option<&[u8]>) -> CommandOutput {
+        if self.needs_interactive(cmd, stdin_data) {
+            return self.execute_interactive_piped(cmd, stdin_data);
+        }
+
         let mut process = Command::new(&cmd.program);
         process.args(&cmd.args);
         process.current_dir(&self.cwd);
         process.envs(&self.env_vars);
+
+        unsafe {
+            process.pre_exec(|| {
+                libc::signal(libc::SIGINT, libc::SIG_DFL);
+                libc::signal(libc::SIGQUIT, libc::SIG_DFL);
+                libc::signal(libc::SIGTSTP, libc::SIG_DFL);
+                Ok(())
+            });
+        }
 
         if stdin_data.is_some() || cmd.stdin_redirect.is_some() {
             process.stdin(Stdio::piped());
@@ -128,7 +174,7 @@ impl Executor {
 
                 match child.wait_with_output() {
                     Ok(output) => {
-                        let exit_code = output.status.code().unwrap_or(-1);
+                        let exit_code = exit_code_from_status(&output.status);
                         self.last_exit_code = exit_code;
 
                         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -138,20 +184,79 @@ impl Executor {
                             self.write_redirect(redirect, &stdout);
                         }
 
-                        if exit_code == 0 {
-                            CommandOutput {
-                                stdout,
-                                stderr,
-                                structured: None,
-                                exit_code,
-                            }
-                        } else {
-                            CommandOutput {
-                                stdout,
-                                stderr,
-                                structured: None,
-                                exit_code,
-                            }
+                        CommandOutput {
+                            stdout,
+                            stderr,
+                            structured: None,
+                            exit_code,
+                        }
+                    }
+                    Err(e) => {
+                        self.last_exit_code = 1;
+                        CommandOutput::error(format!("{}: {}", cmd.program, e), 1)
+                    }
+                }
+            }
+            Err(e) => {
+                self.last_exit_code = 127;
+                CommandOutput::error(format!("{}: command not found ({})", cmd.program, e), 127)
+            }
+        }
+    }
+
+    fn execute_interactive_piped(
+        &mut self,
+        cmd: &ParsedCommand,
+        stdin_data: Option<&[u8]>,
+    ) -> CommandOutput {
+        let mut process = Command::new(&cmd.program);
+        process.args(&cmd.args);
+        process.current_dir(&self.cwd);
+        process.envs(&self.env_vars);
+
+        if stdin_data.is_some() || cmd.stdin_redirect.is_some() {
+            process.stdin(Stdio::piped());
+        } else {
+            process.stdin(Stdio::inherit());
+        }
+        process.stdout(Stdio::inherit());
+        process.stderr(Stdio::inherit());
+
+        unsafe {
+            process.pre_exec(|| {
+                libc::signal(libc::SIGINT, libc::SIG_DFL);
+                libc::signal(libc::SIGQUIT, libc::SIG_DFL);
+                libc::signal(libc::SIGTSTP, libc::SIG_DFL);
+                Ok(())
+            });
+        }
+
+        match process.spawn() {
+            Ok(mut child) => {
+                if let Some(data) = stdin_data {
+                    if let Some(mut stdin) = child.stdin.take() {
+                        let _ = stdin.write_all(data);
+                        drop(stdin);
+                    }
+                } else if let Some(ref redirect_path) = cmd.stdin_redirect {
+                    let path = crate::parser::resolve_path(redirect_path, &self.cwd);
+                    if let Ok(data) = std::fs::read(&path) {
+                        if let Some(mut stdin) = child.stdin.take() {
+                            let _ = stdin.write_all(&data);
+                            drop(stdin);
+                        }
+                    }
+                }
+
+                match child.wait() {
+                    Ok(status) => {
+                        let exit_code = exit_code_from_status(&status);
+                        self.last_exit_code = exit_code;
+                        CommandOutput {
+                            stdout: String::new(),
+                            stderr: String::new(),
+                            structured: None,
+                            exit_code,
                         }
                     }
                     Err(e) => {
@@ -251,4 +356,15 @@ impl Executor {
             let _ = std::fs::write(&path, content);
         }
     }
+}
+
+fn exit_code_from_status(status: &std::process::ExitStatus) -> i32 {
+    if let Some(code) = status.code() {
+        return code;
+    }
+    use std::os::unix::process::ExitStatusExt;
+    if let Some(sig) = status.signal() {
+        return 128 + sig;
+    }
+    -1
 }

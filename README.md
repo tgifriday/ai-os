@@ -6,21 +6,41 @@ A drop-in shell replacement with AI built in. Every command runs natively on you
 
 ## Quick Start
 
+### Install
+
 ```bash
-# Build
-cd aios
-cargo build --release
-
-# Run
-./target/release/aios-shell
-
-# Or during development
-cargo run -p aios-shell
+git clone git@github.com:tgifriday/ai-os.git
+cd ai-os
+make install
 ```
 
-The shell works immediately as a normal shell. All your system commands (`ls`, `ps`, `git`, `docker`, etc.) pass straight through to the OS.
+This installs two things:
 
-To enable AI, configure a backend -- see [Bringing AI Online](#bringing-ai-online) below.
+- `aish` binary to `/usr/local/bin/`
+- Default config to `~/.config/aios/llm.yml` (won't overwrite an existing config)
+
+Start the shell:
+
+```bash
+aish
+```
+
+It works immediately as a normal shell. All your system commands (`ls`, `ps`, `git`, `docker`, etc.) pass straight through to the OS.
+
+To enable AI, edit `~/.config/aios/llm.yml` and enable a backend -- see [Bringing AI Online](#bringing-ai-online) below.
+
+<details>
+<summary>Other install methods</summary>
+
+```bash
+# Via cargo (config not auto-installed -- copy config/llm.yml to ~/.config/aios/ manually)
+cargo install --path aios-shell
+
+# Just build and run locally
+cargo build --release
+./target/release/aish
+```
+</details>
 
 ---
 
@@ -130,10 +150,39 @@ $ llm off                      # Disable AI
 
 ### Config File Locations
 
-AIOS searches for `llm.toml` in this order:
-1. `./config/llm.toml` (relative to working directory)
-2. `/etc/aios/llm.toml` (system-wide)
-3. `~/.config/aios/llm.toml` (per-user)
+AIOS searches for config files in this order, stopping at the first one found:
+
+1. `./config/llm.{toml,yaml,yml,json}`
+2. `/etc/aios/llm.{toml,yaml,yml,json}`
+3. `~/.config/aios/llm.{toml,yaml,yml,json}`
+
+Use whichever format you prefer. TOML, YAML, and JSON are all supported -- the format is auto-detected from the file extension.
+
+<details>
+<summary>YAML example</summary>
+
+```yaml
+# config/llm.yaml
+network:
+  enabled: true
+  url: "http://localhost:11434"
+  model: "llama3.1:8b"
+```
+</details>
+
+<details>
+<summary>JSON example</summary>
+
+```json
+{
+  "network": {
+    "enabled": true,
+    "url": "http://localhost:11434",
+    "model": "llama3.1:8b"
+  }
+}
+```
+</details>
 
 ---
 
@@ -216,10 +265,11 @@ $ sort < input.txt
 | **aios-core** | Rust command implementations. Available for `aios-os` mode; the shell itself passes through to the OS. |
 | **aios-init** | Init system / service manager (for OS mode). |
 
-### Two Binaries
+### Binaries
 
-- **`aios-shell`** -- The AI shell. This is what you use. Commands pass through to your OS.
-- **`aios-os`** -- Experimental AI OS layer with built-in command reimplementations. Preserved for future exploration. Build with `cargo run -p aios-shell --bin aios-os`.
+- **`aish`** -- The AI shell. This is what you install and use daily.
+- **`aios-shell`** -- Alias for `aish` (same binary, alternate name).
+- **`aios-os`** -- Experimental AI OS layer with built-in command reimplementations. Preserved for future exploration. Run with `cargo run -p aios-shell --bin aios-os`.
 
 ---
 
@@ -255,7 +305,7 @@ impl LlmBackend for MyBackend {
 }
 ```
 
-Register it in `build_llm_router()` in `aios-shell/src/main.rs` and it works with the `llm` command automatically.
+Register it in `build_llm_router()` in `aios-shell/src/main.rs` and it works with the `llm` command automatically. Restart `aish` to pick it up, or use `llm reload` if you wire it into the config.
 
 ### Adding Knowledge
 
@@ -277,7 +327,7 @@ Documents are automatically injected into LLM context when relevant to a query.
 
 ## Configuration Reference
 
-### `config/llm.toml`
+### `config/llm.toml` (or `.yaml` / `.json`)
 
 ```toml
 [defaults]
@@ -313,10 +363,17 @@ model = "claude-sonnet-4-20250514"
 ## Docker
 
 ```bash
-docker build -t aios .
-docker run -it aios                                    # Basic shell
-docker run -it -e OPENAI_API_KEY="sk-..." aios         # With cloud AI
-docker run -it --network host aios                     # With Ollama on host
+docker build -t aish .
+docker run -it aish                                    # Basic shell
+docker run -it -e OPENAI_API_KEY="sk-..." aish         # With cloud AI
+docker run -it --network host aish                     # With Ollama on host
+```
+
+### Uninstall
+
+```bash
+make uninstall          # If installed via make
+cargo uninstall aish    # If installed via cargo
 ```
 
 ---
