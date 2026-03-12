@@ -211,6 +211,9 @@ fn read_line_raw(
 ) -> LineReadResult {
     loop {
         if let Ok(Event::Key(key_event)) = event::read() {
+            if key_event.kind != crossterm::event::KeyEventKind::Press {
+                continue;
+            }
             match key_event {
                 KeyEvent {
                     code: KeyCode::Enter,
