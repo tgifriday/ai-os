@@ -29,8 +29,7 @@ It works immediately as a normal shell. All your system commands (`ls`, `ps`, `g
 
 To enable AI, edit `~/.config/aios/llm.yml` and enable a backend -- see [Bringing AI Online](#bringing-ai-online) below.
 
-<details>
-<summary>Other install methods</summary>
+Other install methods
 
 ```bash
 # Via cargo (config not auto-installed -- copy config/llm.yml to ~/.config/aios/ manually)
@@ -40,7 +39,8 @@ cargo install --path aios-shell
 cargo build --release
 ./target/release/aish
 ```
-</details>
+
+
 
 ---
 
@@ -158,8 +158,7 @@ AIOS searches for config files in this order, stopping at the first one found:
 
 Use whichever format you prefer. TOML, YAML, and JSON are all supported -- the format is auto-detected from the file extension.
 
-<details>
-<summary>YAML example</summary>
+YAML example
 
 ```yaml
 # config/llm.yaml
@@ -168,10 +167,10 @@ network:
   url: "http://localhost:11434"
   model: "llama3.1:8b"
 ```
-</details>
 
-<details>
-<summary>JSON example</summary>
+
+
+JSON example
 
 ```json
 {
@@ -182,7 +181,8 @@ network:
   }
 }
 ```
-</details>
+
+
 
 ---
 
@@ -192,24 +192,28 @@ network:
 
 These are the only commands handled by the shell itself. Everything else runs on your OS:
 
-| Command | Purpose |
-|---|---|
-| `cd <dir>` | Change directory |
-| `export KEY=VALUE` | Set environment variable |
-| `clear` | Clear screen |
-| `history` | Show command history |
-| `help` | Show help |
-| `exit` / `quit` | Exit shell |
+
+| Command            | Purpose                        |
+| ------------------ | ------------------------------ |
+| `cd <dir>`         | Change directory               |
+| `export KEY=VALUE` | Set environment variable       |
+| `clear`            | Clear screen                   |
+| `history`          | Show command history           |
+| `help`             | Show help                      |
+| `exit` / `quit`    | Exit shell                     |
 | `llm [subcommand]` | Control AI backend (see above) |
+
 
 ### AI Features
 
-| Syntax | What it does |
-|---|---|
-| `@<query>` | Force input through the AI |
-| `cmd \| @<action>` | Pipe command output to AI |
-| Plain English | Auto-routed to AI if not a command |
-| Failed commands | AI automatically suggests fixes |
+
+| Syntax            | What it does                       |
+| ----------------- | ---------------------------------- |
+| `@<query>`        | Force input through the AI         |
+| `cmd | @<action>` | Pipe command output to AI          |
+| Plain English     | Auto-routed to AI if not a command |
+| Failed commands   | AI automatically suggests fixes    |
+
 
 ### Pipes and Redirects
 
@@ -227,49 +231,131 @@ $ sort < input.txt
 
 ## Architecture
 
+### `aish` -- the AI shell (what you use)
+
+Commands pass through to your OS. The AI handles errors, natural language, and queries.
+
 ```
-┌───────────────────────────────────────────────┐
-│                  User Input                    │
-└──────────────────────┬────────────────────────┘
-                       │
-┌──────────────────────▼────────────────────────┐
-│                 aios-shell                      │
-│  ┌──────────┐  ┌────────────┐  ┌────────────┐  │
-│  │  Parser   │  │   Router   │  │    LLM     │  │
-│  │ pipes,    │  │ command vs │  │  control   │  │
-│  │ redirects │  │ AI routing │  │  (llm cmd) │  │
-│  └──────────┘  └──────┬─────┘  └────────────┘  │
-└────────────────────────┼──────────────────────┘
-          ┌──────────────┼──────────────┐
-          ▼              ▼              ▼
-   ┌─────────────┐ ┌─────────┐  ┌─────────────┐
-   │  Your OS    │ │ aios-llm│  │  aios-      │
-   │  (native    │ │ runtime │  │  knowledge  │
-   │  commands)  │ │         │  │  RAG store  │
-   └─────────────┘ └────┬────┘  └─────────────┘
-                        │
-                        ├── Ollama (network)
-                        ├── OpenAI (cloud)
-                        ├── Anthropic (cloud)
-                        └── Local GGUF (planned)
+┌──────────────────────────────────────────┐
+│               User Input                 │
+└────────────────────┬─────────────────────┘
+                     │
+┌────────────────────▼─────────────────────┐
+│               aios-shell                 │
+│                                          │
+│  ┌─────────┐ ┌──────────┐ ┌───────────┐  │
+│  │ Parser  │ │  Router  │ │ Completer │  │
+│  │ globs,  │ │ cmd? AI? │ │ paths,    │  │
+│  │ ;  &&   │ │ signals, │ │ tab, cmds │  │
+│  │ || $()  │ │ errors   │ │           │  │
+│  └─────────┘ └─────┬────┘ └───────────┘  │
+└────────────────────┼─────────────────────┘
+       ┌─────────────┼────────────┐
+       ▼             ▼            ▼
+┌────────────┐ ┌──────────┐ ┌───────────┐
+│ Native OS  │ │ aios-llm │ │   aios-   │
+│ ls, git,   │ │   LLM    │ │ knowledge │
+│ vim, etc.  │ │  router  │ │ RAG store │
+└────────────┘ └────┬─────┘ └───────────┘
+                    │
+                    ├── Ollama (network)
+                    ├── OpenAI (cloud)
+                    ├── Anthropic (cloud)
+                    └── Local GGUF (planned)
+```
+
+### `aios-os` -- the experimental OS layer
+
+Self-contained environment with built-in Rust reimplementations of core commands
+(`ls`, `ps`, `df`, `grep`, `cat`, `wc`, etc.). Does not depend on the host OS
+having these tools installed. Useful for minimal containers, embedded systems,
+or bare-metal scenarios where you want a fully Rust-native command environment
+with AI built in.
+
+```
+┌──────────────────────────────────────────┐
+│               User Input                 │
+└────────────────────┬─────────────────────┘
+                     │
+┌────────────────────▼─────────────────────┐
+│               aios-shell                 │
+│  ┌─────────┐ ┌───────────┐ ┌───────────┐ │
+│  │ Parser  │ │   Router  │ │ Completer │ │
+│  └─────────┘ └─────┬─────┘ └───────────┘ │
+└────────────────────┼─────────────────────┘
+       ┌─────────────┼────────────┐
+       ▼             ▼            ▼
+┌────────────┐ ┌──────────┐ ┌───────────┐
+│ aios-core  │ │ aios-llm │ │   aios-   │
+│ Rust cmds: │ │   LLM    │ │ knowledge │
+│ ls, ps, df │ │  router  │ │ RAG store │
+│ grep, etc. │ └────┬─────┘ └───────────┘
+└─────┬──────┘      │
+      │             ├── Ollama (network)
+┌─────▼──────┐      ├── OpenAI (cloud)
+│aios-kernel │      ├── Anthropic (cloud)
+│ syscalls   │      └── Local GGUF (planned)
+└─────┬──────┘
+      │
+┌─────▼──────┐
+│ aios-init  │
+│ services   │
+└────────────┘
 ```
 
 ### Crates
 
-| Crate | Purpose |
-|---|---|
-| **aios-shell** | The shell itself. REPL, parser, smart router, tab completion, history, `llm` command, AI error recovery. |
-| **aios-llm** | Pluggable LLM runtime. `LlmBackend` trait with cloud (OpenAI, Anthropic), network (Ollama), and local (placeholder) backends. Priority-based router with fallback. |
-| **aios-knowledge** | Embedded knowledge base. TF-IDF search over built-in documentation. Provides context to the LLM automatically. |
-| **aios-kernel** | Thin Rust wrappers over syscalls. Used by the separate `aios-os` binary (see below). |
-| **aios-core** | Rust command implementations. Available for `aios-os` mode; the shell itself passes through to the OS. |
-| **aios-init** | Init system / service manager (for OS mode). |
+
+| Crate              | Used by | Purpose                                                                        |
+| ------------------ | ------- | ------------------------------------------------------------------------------ |
+| **aios-shell**     | both    | REPL, parser, router, tab completion, history, `llm` command, signal handling  |
+| **aios-llm**       | both    | Pluggable LLM runtime. Ollama, OpenAI, Anthropic, and local (planned) backends |
+| **aios-knowledge** | both    | Embedded knowledge base. TF-IDF search, injected into LLM context              |
+| **aios-core**      | OS only | Rust reimplementations of coreutils (ls, grep, ps, df, etc.)                   |
+| **aios-kernel**    | OS only | Thin Rust wrappers over syscalls via `nix` crate                               |
+| **aios-init**      | OS only | Init system and service manager                                                |
+
 
 ### Binaries
 
-- **`aish`** -- The AI shell. This is what you install and use daily.
-- **`aios-shell`** -- Alias for `aish` (same binary, alternate name).
-- **`aios-os`** -- Experimental AI OS layer with built-in command reimplementations. Preserved for future exploration. Run with `cargo run -p aios-shell --bin aios-os`.
+
+| Binary        | What it does                                                                    |
+| ------------- | ------------------------------------------------------------------------------- |
+| `**aish`**    | The AI shell. Install and use daily. Commands pass through to your OS.          |
+| `**aios-os**` | Self-contained OS layer. Built-in Rust commands, no host dependency. See below. |
+
+
+### Installing and using `aios-os`
+
+```bash
+# Install both binaries
+make install-all
+
+# Or just the OS binary
+make install-os
+
+# Or run directly from source
+cargo run -p aios-shell --bin aios-os
+```
+
+`aios-os` works the same as `aish` (same prompt, same AI, same `llm` command) with one key difference: commands like `ls`, `ps`, `df`, `grep`, `cat`, `head`, `tail`, `wc`, `du`, `cp`, `rm`, and `mkdir` are handled by built-in Rust implementations instead of the host OS. This means:
+
+- **No external dependencies** -- works even if the host has no coreutils installed
+- **Cross-platform consistency** -- same output format on Linux, macOS, containers
+- **Syscall-level access** -- the built-ins use `aios-kernel` (Rust wrappers over `nix`) for direct system interaction
+
+Commands that are *not* reimplemented (e.g., `git`, `docker`, `python`) still pass through to the host OS, same as `aish`.
+
+**When to use `aios-os` instead of `aish`:**
+
+
+| Scenario                                | Use       |
+| --------------------------------------- | --------- |
+| Daily terminal use on macOS/Linux       | `aish`    |
+| Minimal Docker containers               | `aios-os` |
+| Embedded / bare-metal systems           | `aios-os` |
+| Exploring the self-contained OS concept | `aios-os` |
+
 
 ---
 
@@ -364,15 +450,20 @@ model = "claude-sonnet-4-20250514"
 
 ```bash
 docker build -t aish .
-docker run -it aish                                    # Basic shell
-docker run -it -e OPENAI_API_KEY="sk-..." aish         # With cloud AI
-docker run -it --network host aish                     # With Ollama on host
+
+# Run the AI shell
+docker run -it aish
+docker run -it -e OPENAI_API_KEY="sk-..." aish
+docker run -it --network host aish
+
+# Run the OS layer instead (self-contained commands)
+docker run -it --entrypoint aios-os aish
 ```
 
 ### Uninstall
 
 ```bash
-make uninstall          # If installed via make
+make uninstall          # Removes both aish and aios-os
 cargo uninstall aish    # If installed via cargo
 ```
 

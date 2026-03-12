@@ -79,7 +79,7 @@ fn print_banner(has_ai: bool) {
     if has_ai {
         println!(" \x1b[32mAI: online\x1b[0m | Type \x1b[1m@help\x1b[0m for AI commands");
     } else {
-        println!(" \x1b[33mAI: offline\x1b[0m | Configure LLM in config/llm.toml");
+        println!(" \x1b[33mAI: offline\x1b[0m | Configure LLM in ~/.config/aios/llm.yml");
     }
     println!(" Type \x1b[1mhelp\x1b[0m for commands, \x1b[1mexit\x1b[0m to quit");
     println!();

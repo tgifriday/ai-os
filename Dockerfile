@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /aios/target/release/aish /usr/local/bin/aish
+COPY --from=builder /aios/target/release/aios-os /usr/local/bin/aios-os
 COPY --from=builder /aios/target/release/aios-init /usr/local/bin/aios-init
 COPY config/ /etc/aios/
 
