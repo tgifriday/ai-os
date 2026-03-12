@@ -13,6 +13,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum ProcessError {
+    #[cfg(unix)]
     #[error("fork failed: {0}")]
     ForkFailed(#[from] nix::Error),
     #[error("exec failed: {0}")]
