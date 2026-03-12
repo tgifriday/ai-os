@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.4 -- 2026-03-12
+
+### CI fixes
+
+- Switched `reqwest` from `native-tls` to `rustls-tls` (pure Rust TLS) so Linux and Windows CI builds no longer require OpenSSL system headers
+- Removed `aarch64-pc-windows-msvc` target (can't cross-compile from x86_64 Windows runners)
+- Added Rust build caching via `Swatinem/rust-cache` to speed up CI
+
 ## 0.1.3 -- 2026-03-12
 
 ### Release workflow and Windows compatibility
