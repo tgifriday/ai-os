@@ -75,7 +75,7 @@ fn print_banner(has_ai: bool) {
     println!("  / ___ \\ | | |_| |___) |");
     println!(" /_/   \\_\\___\\___/|____/ ");
     println!("\x1b[0m");
-    println!(" AI Operating System v0.1.0");
+    println!(" AI Operating System v{}", env!("CARGO_PKG_VERSION"));
     if has_ai {
         println!(" \x1b[32mAI: online\x1b[0m | Type \x1b[1m@help\x1b[0m for AI commands");
     } else {
@@ -87,6 +87,12 @@ fn print_banner(has_ai: bool) {
 
 #[tokio::main]
 async fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--version" || a == "-V") {
+        println!("aios-os {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
     #[cfg(unix)]
     unsafe {
         libc::signal(libc::SIGINT, libc::SIG_IGN);
