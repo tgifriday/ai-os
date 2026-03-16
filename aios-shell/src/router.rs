@@ -804,22 +804,30 @@ impl ShellRouter {
         }
     }
 
-    /// Complete a request through the LLM router, recording usage to Mission Control.
+/// Complete a request through the LLM router, recording usage to Mission Control.
     async fn tracked_complete(&mut self, request: CompletionRequest) -> Option<CompletionResponse> {
-        let router = self.llm_router.as_ref()?;
+        if self.llm_router.is_none() {
+            return None;
+        }
 
-        // Grab backend info before the call
-        let backends = router.backend_info();
-        let active = backends.iter().find(|(_, _, avail)| *avail);
-        let (backend_name, model_name) = match active {
-            Some((b, m, _)) => (b.to_string(), m.to_string()),
-            None => ("unknown".to_string(), "unknown".to_string()),
-        };
+        // Extract backend info before the await — all owned values, no refs into self
+        let (backend_name, model_name) = self
+            .llm_router
+            .as_ref()
+            .and_then(|r| {
+                r.backend_info()
+                    .iter()
+                    .find(|(_, _, avail)| *avail)
+                    .map(|(b, m, _)| (b.to_string(), m.to_string()))
+            })
+            .unwrap_or_else(|| ("unknown".to_string(), "unknown".to_string()));
 
+        // Perform the LLM call — borrow of self.llm_router is scoped to this expression
         let start = Instant::now();
-        let result = router.complete(request).await;
+        let result = self.llm_router.as_ref().unwrap().complete(request).await;
         let latency_ms = start.elapsed().as_millis() as u64;
 
+        // Now safe to mutably borrow self for usage tracking
         match result {
             Ok(response) => {
                 self.usage_tracker.record(
@@ -832,7 +840,6 @@ impl ShellRouter {
             }
             Err(e) => {
                 eprintln!("\x1b[31mAI error: {}\x1b[0m", e);
-                // Still record the attempt (zero tokens, but captures latency)
                 self.usage_tracker.record(&backend_name, &model_name, None, latency_ms);
                 None
             }
