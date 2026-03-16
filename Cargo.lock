@@ -13,7 +13,7 @@ dependencies = [
 
 [[package]]
 name = "aios-core"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "aios-kernel",
  "chrono",
@@ -26,7 +26,7 @@ dependencies = [
 
 [[package]]
 name = "aios-init"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "aios-knowledge",
  "aios-llm",
@@ -41,7 +41,7 @@ dependencies = [
 
 [[package]]
 name = "aios-kernel"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "nix",
  "serde",
@@ -52,7 +52,7 @@ dependencies = [
 
 [[package]]
 name = "aios-knowledge"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "serde",
@@ -64,11 +64,13 @@ dependencies = [
 
 [[package]]
 name = "aios-llm"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
+ "chrono",
+ "dirs",
  "futures",
  "reqwest",
  "serde",
@@ -83,7 +85,7 @@ dependencies = [
 
 [[package]]
 name = "aios-shell"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "aios-core",
  "aios-kernel",

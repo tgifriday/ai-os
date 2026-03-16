@@ -6,7 +6,6 @@ members = [
     "aios-llm",
     "aios-init",
     "aios-knowledge",
-    "aios-mission-control",
 ]
 resolver = "2"
 

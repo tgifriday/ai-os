@@ -806,26 +806,24 @@ impl ShellRouter {
 
 /// Complete a request through the LLM router, recording usage to Mission Control.
     async fn tracked_complete(&mut self, request: CompletionRequest) -> Option<CompletionResponse> {
-        if self.llm_router.is_none() {
-            return None;
-        }
+        // Take ownership of the router to avoid borrow-across-await
+        let router = self.llm_router.take()?;
+        let backend_info = router.backend_info();
 
         // Extract backend info before the await — all owned values, no refs into self
-        let (backend_name, model_name) = self
-            .llm_router
-            .as_ref()
-            .and_then(|r| {
-                r.backend_info()
-                    .iter()
-                    .find(|(_, _, avail)| *avail)
-                    .map(|(b, m, _)| (b.to_string(), m.to_string()))
-            })
+        let (backend_name, model_name) = backend_info
+            .iter()
+            .find(|(_, _, avail)| *avail)
+            .map(|(b, m, _)| (b.to_string(), m.to_string()))
             .unwrap_or_else(|| ("unknown".to_string(), "unknown".to_string()));
 
-        // Perform the LLM call — borrow of self.llm_router is scoped to this expression
+        // Perform the LLM call — router is now owned, not borrowed from self
         let start = Instant::now();
-        let result = self.llm_router.as_ref().unwrap().complete(request).await;
+        let result = router.complete(request).await;
         let latency_ms = start.elapsed().as_millis() as u64;
+
+        // Restore the router
+        self.llm_router = Some(router);
 
         // Now safe to mutably borrow self for usage tracking
         match result {
