@@ -31,3 +31,11 @@ cloud:
     enabled: false
     api_key_env: ANTHROPIC_API_KEY
     model: claude-sonnet-4-20250514
+
+# Usage tracking (opt-in). All data stays local unless you set a webhook.
+# View session stats with the `usage` command inside the shell.
+mission_control:
+  enabled: false
+  # log_path: "~/.config/aios/mission-control.jsonl"
+  # webhook_url: "https://hooks.slack.com/services/..."
+  # max_log_mb: 50

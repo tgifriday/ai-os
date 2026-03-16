@@ -157,6 +157,11 @@ fn is_known_command(cmd: &str) -> bool {
         return true;
     }
 
+    #[cfg(windows)]
+    if is_cmd_builtin(cmd) {
+        return true;
+    }
+
     if matches!(
         cmd,
         "clear"
@@ -208,15 +213,63 @@ fn is_known_command(cmd: &str) -> bool {
     }
 
     if let Ok(path_var) = std::env::var("PATH") {
-        for dir in path_var.split(':') {
-            let candidate = std::path::PathBuf::from(dir).join(cmd);
-            if candidate.exists() {
+        for dir in path_dirs(&path_var) {
+            if command_exists_in_dir(&dir, cmd) {
                 return true;
             }
         }
     }
 
     false
+}
+
+#[cfg(windows)]
+fn is_cmd_builtin(cmd: &str) -> bool {
+    matches!(
+        cmd.to_lowercase().as_str(),
+        "dir" | "copy" | "del" | "erase" | "type" | "echo" | "cls" | "date" | "time"
+            | "set" | "md" | "mkdir" | "rd" | "rmdir" | "ren" | "rename" | "move"
+            | "xcopy" | "find" | "findstr" | "sort" | "more" | "help" | "ping"
+            | "ipconfig" | "netstat" | "tasklist" | "taskkill" | "systeminfo"
+    )
+}
+
+fn path_dirs(path_var: &str) -> impl Iterator<Item = std::path::PathBuf> + '_ {
+    let separator = if cfg!(windows) { ';' } else { ':' };
+    path_var.split(separator).filter_map(|s| {
+        let s = s.trim();
+        if s.is_empty() {
+            None
+        } else {
+            Some(std::path::PathBuf::from(s))
+        }
+    })
+}
+
+fn command_exists_in_dir(dir: &std::path::Path, cmd: &str) -> bool {
+    let candidate = dir.join(cmd);
+    if candidate.exists() {
+        return true;
+    }
+    #[cfg(windows)]
+    for ext in [".exe", ".cmd", ".bat"] {
+        let with_ext = dir.join(format!("{}{}", cmd, ext));
+        if with_ext.exists() {
+            return true;
+        }
+    }
+    false
+}
+
+/// Returns (program, args) for spawning. On Windows, CMD built-ins are wrapped in `cmd /c`.
+pub fn resolve_command_for_exec(cmd: &ParsedCommand) -> (String, Vec<String>) {
+    #[cfg(windows)]
+    if is_cmd_builtin(&cmd.program) {
+        let mut args = vec!["/c".to_string(), cmd.program.clone()];
+        args.extend(cmd.args.clone());
+        return ("cmd".to_string(), args);
+    }
+    (cmd.program.clone(), cmd.args.clone())
 }
 
 pub fn parse_pipeline(input: &str) -> Option<Pipeline> {

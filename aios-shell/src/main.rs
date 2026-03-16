@@ -92,6 +92,39 @@ async fn main() {
         println!("aish {}", env!("CARGO_PKG_VERSION"));
         return;
     }
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        println!("aish {} — AI Shell", env!("CARGO_PKG_VERSION"));
+        println!();
+        println!("A drop-in shell replacement with AI built in. Every command runs");
+        println!("natively on your OS. When something fails, the AI helps.");
+        println!();
+        println!("USAGE:");
+        println!("    aish              Start the interactive shell");
+        println!("    aish --version    Print version");
+        println!("    aish --help       Print this help");
+        println!();
+        println!("AI FEATURES (inside the shell):");
+        println!("    @<query>          Ask the AI anything");
+        println!("    cmd | @<question> Pipe command output to AI for analysis");
+        println!("    Plain English     Auto-routed to AI if not a command");
+        println!("    Failed commands   AI investigates and suggests fixes");
+        println!();
+        println!("LLM CONTROL:");
+        println!("    llm               Show current backend and model");
+        println!("    llm use <backend>  Switch backend (ollama, openai, anthropic)");
+        println!("    llm model <name>   Change model on active backend");
+        println!("    llm reload         Re-read config from disk");
+        println!("    llm off            Disable AI");
+        println!();
+        println!("CONFIG:");
+        println!("    Config is loaded from the first file found:");
+        println!("      ./config/llm.{{toml,yaml,yml,json}}");
+        println!("      /etc/aios/llm.{{toml,yaml,yml,json}}");
+        println!("      ~/.config/aios/llm.{{toml,yaml,yml,json}}");
+        println!();
+        println!("    https://github.com/tgifriday/ai-os");
+        return;
+    }
 
     #[cfg(unix)]
     unsafe {

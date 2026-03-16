@@ -1,0 +1,73 @@
+name: Bug Report
+description: Something isn't working right
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug — this helps a lot. Fill in what you can.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, and what went wrong?
+      placeholder: |
+        I typed `llm use ollama mistral` and got a panic.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should have happened?
+      placeholder: |
+        It should have switched to the mistral model.
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start aish
+        2. Run `llm use ollama mistral`
+        3. See error
+
+  - type: dropdown
+    id: binary
+    attributes:
+      label: Which binary?
+      options:
+        - aish
+        - aios-os
+        - Docker image
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Run `aish --version`
+      placeholder: "0.1.4"
+
+  - type: input
+    id: os
+    attributes:
+      label: OS and architecture
+      placeholder: "Ubuntu 24.04 x86_64 / macOS 15 arm64 / etc."
+
+  - type: textarea
+    id: llm-config
+    attributes:
+      label: LLM config (if relevant)
+      description: Paste your config/llm.toml (redact API keys)
+      render: toml
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error output or logs
+      description: Paste any error messages or stack traces
+      render: text
