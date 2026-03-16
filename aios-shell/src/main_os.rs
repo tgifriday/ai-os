@@ -92,6 +92,24 @@ async fn main() {
         println!("aios-os {}", env!("CARGO_PKG_VERSION"));
         return;
     }
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        println!("aios-os {} — AI Operating System", env!("CARGO_PKG_VERSION"));
+        println!();
+        println!("Self-contained shell with built-in Rust coreutils and AI.");
+        println!("Same as aish, but commands like ls, ps, grep, df run as");
+        println!("built-in Rust implementations — no host coreutils needed.");
+        println!();
+        println!("USAGE:");
+        println!("    aios-os           Start the interactive shell");
+        println!("    aios-os --version Print version");
+        println!("    aios-os --help    Print this help");
+        println!();
+        println!("Use aios-os for minimal containers, embedded systems, or");
+        println!("bare-metal scenarios. Use aish for daily terminal work.");
+        println!();
+        println!("    https://github.com/tgifriday/ai-os");
+        return;
+    }
 
     #[cfg(unix)]
     unsafe {

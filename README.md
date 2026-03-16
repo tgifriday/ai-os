@@ -4,6 +4,33 @@ A drop-in shell replacement with AI built in. Every command runs natively on you
 
 ---
 
+## Why This Matters
+
+Most AI terminal tools fall into two camps: **coding agents** that take over your workflow, or **wrappers** that intercept every keystroke. AIOS is neither.
+
+**It's a real shell.** When you type `git push`, that runs `git push`. No interception, no reimplementation, no latency. Your muscle memory works. Your scripts work. Your pipes work.
+
+**AI only shows up when you need it.** Type a command that doesn't exist? The AI investigates your system, finds similar commands, and tells you how to install the right one. Command fails with a cryptic error? The AI explains what happened. Want to ask something in plain English? Just type it.
+
+**No vendor lock-in.** Switch between Ollama (local, private), OpenAI, or Anthropic — live, mid-session, no restart. Run `llm use ollama mistral` and you're on a local model. Run `llm use openai gpt-4o` and you're on the cloud. Your choice, your data, your rules.
+
+**Compare:**
+
+| | AIOS | Coding Agents (Cline, Codex) | AI Terminals (Warp) |
+|---|---|---|---|
+| Commands run natively | ✅ | ❌ Reimplemented | Varies |
+| Works without AI | ✅ | ❌ | ❌ |
+| Switch models live | ✅ | Limited | ❌ |
+| Fully local option | ✅ Ollama | Depends | ❌ |
+| Open source | ✅ MIT/Apache | Varies | ❌ |
+| Error recovery | ✅ Automatic | Manual | ❌ |
+
+**See it in action:** [`demos/`](demos/) has annotated transcripts showing error recovery, plain English queries, AI pipes, and live model switching.
+
+**Where it's headed:** [`ROADMAP.md`](ROADMAP.md) tracks the full plan from foundation through enterprise readiness to platform vision.
+
+---
+
 ## Quick Start
 
 ### Install
@@ -202,6 +229,7 @@ These are the only commands handled by the shell itself. Everything else runs on
 | `help`             | Show help                      |
 | `exit` / `quit`    | Exit shell                     |
 | `sanitize`         | Clear AI conversation context  |
+| `usage`            | Show token usage, cost, latency |
 | `llm [subcommand]` | Control AI backend (see above) |
 
 
@@ -504,21 +532,42 @@ model = "gpt-4o"
 enabled = false
 api_key_env = "ANTHROPIC_API_KEY"
 model = "claude-sonnet-4-20250514"
+
+# Usage tracking (opt-in, all data stays local)
+[mission_control]
+enabled = false
+# log_path = "~/.config/aios/mission-control.jsonl"
+# webhook_url = "https://hooks.slack.com/services/..."
+# max_log_mb = 50
 ```
 
 ---
 
 ## Docker
 
+### Pre-built images (linux/amd64 + linux/arm64)
+
+```bash
+# Pull the latest release
+docker pull ghcr.io/tgifriday/ai-os:latest
+
+# Run the AI shell
+docker run -it ghcr.io/tgifriday/ai-os:latest
+docker run -it -e OPENAI_API_KEY="sk-..." ghcr.io/tgifriday/ai-os:latest
+docker run -it --network host ghcr.io/tgifriday/ai-os:latest
+
+# Run the OS layer instead (self-contained commands)
+docker run -it --entrypoint aios-os ghcr.io/tgifriday/ai-os:latest
+```
+
+### Build from source
+
 ```bash
 docker build -t aish .
 
-# Run the AI shell
 docker run -it aish
 docker run -it -e OPENAI_API_KEY="sk-..." aish
 docker run -it --network host aish
-
-# Run the OS layer instead (self-contained commands)
 docker run -it --entrypoint aios-os aish
 ```
 

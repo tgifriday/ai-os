@@ -3,13 +3,15 @@ use crate::history::History;
 use crate::parser::{self, InputClassification};
 use aios_core::CommandOutput;
 use aios_llm::{
-    CompletionRequest, ContextManager, LlmRouter, Message, MessageRole, OsState,
+    CompletionRequest, CompletionResponse, ContextManager, LlmRouter, Message, MessageRole, OsState,
+    UsageTracker,
 };
 use aios_llm::config::LlmConfig;
 use aios_llm::cloud::{AnthropicBackend, OpenAiBackend};
 use aios_llm::local::LocalBackend;
 use aios_llm::network::NetworkBackend;
 use aios_knowledge::KnowledgeIndex;
+use std::time::Instant;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ShellMode {
@@ -27,6 +29,7 @@ pub struct ShellRouter {
     pub conversation_history: Vec<Message>,
     pub max_conversation_history: usize,
     pub mode: ShellMode,
+    pub usage_tracker: UsageTracker,
 }
 
 impl ShellRouter {
@@ -35,6 +38,7 @@ impl ShellRouter {
     }
 
     pub fn with_mode(llm_router: Option<LlmRouter>, config: LlmConfig, mode: ShellMode) -> Self {
+        let usage_tracker = UsageTracker::new(config.mission_control.clone());
         Self {
             executor: Executor::new(),
             history: History::new(10000),
@@ -45,6 +49,7 @@ impl ShellRouter {
             conversation_history: Vec::new(),
             max_conversation_history: 20,
             mode,
+            usage_tracker,
         }
     }
 
@@ -263,6 +268,11 @@ impl ShellRouter {
         if trimmed == "llm" || trimmed.starts_with("llm ") {
             let args = trimmed.strip_prefix("llm").unwrap_or("").trim();
             return self.handle_llm_command(args);
+        }
+
+        if trimmed == "usage" {
+            println!("{}", self.usage_tracker.format_session_stats());
+            return HandleResult::Continue;
         }
 
         let expanded = parser::expand_variables(input, &self.executor.env_vars);
@@ -551,14 +561,9 @@ impl ShellRouter {
             );
 
             let request = self.build_ai_request(&query);
-            if let Some(ref router) = self.llm_router {
-                match router.complete(request).await {
-                    Ok(response) => {
-                        eprintln!();
-                        eprintln!("\x1b[33m  {}\x1b[0m", response.content.replace('\n', "\n  "));
-                    }
-                    Err(_) => {}
-                }
+            if let Some(response) = self.tracked_complete(request).await {
+                eprintln!();
+                eprintln!("\x1b[33m  {}\x1b[0m", response.content.replace('\n', "\n  "));
             }
         }
     }
@@ -722,14 +727,9 @@ impl ShellRouter {
             stream: false,
         };
 
-        if let Some(ref router) = self.llm_router {
-            match router.complete(request).await {
-                Ok(response) => {
-                    println!("\x1b[36m{}\x1b[0m", response.content);
-                }
-                Err(e) => {
-                    eprintln!("\x1b[31mAI error: {}\x1b[0m", e);
-                }
+        if self.has_ai() {
+            if let Some(response) = self.tracked_complete(request).await {
+                println!("\x1b[36m{}\x1b[0m", response.content);
             }
         } else {
             eprintln!("\x1b[90mNo AI backend configured. Edit config/llm.toml to enable one.\x1b[0m");
@@ -777,26 +777,21 @@ impl ShellRouter {
             stream: false,
         };
 
-        if let Some(ref router) = self.llm_router {
-            match router.complete(request).await {
-                Ok(response) => {
-                    println!("\x1b[36m{}\x1b[0m", response.content);
-                    if persist_history {
-                        self.conversation_history.push(Message {
-                            role: MessageRole::User,
-                            content: augmented_query,
-                        });
-                        self.conversation_history.push(Message {
-                            role: MessageRole::Assistant,
-                            content: response.content,
-                        });
-                        while self.conversation_history.len() > self.max_conversation_history {
-                            self.conversation_history.remove(0);
-                        }
+        if self.has_ai() {
+            if let Some(response) = self.tracked_complete(request).await {
+                println!("\x1b[36m{}\x1b[0m", response.content);
+                if persist_history {
+                    self.conversation_history.push(Message {
+                        role: MessageRole::User,
+                        content: augmented_query,
+                    });
+                    self.conversation_history.push(Message {
+                        role: MessageRole::Assistant,
+                        content: response.content,
+                    });
+                    while self.conversation_history.len() > self.max_conversation_history {
+                        self.conversation_history.remove(0);
                     }
-                }
-                Err(e) => {
-                    eprintln!("\x1b[31mAI error: {}\x1b[0m", e);
                 }
             }
         } else {
@@ -805,6 +800,41 @@ impl ShellRouter {
                 println!("{}", knowledge);
             } else {
                 eprintln!("\x1b[90mNo AI backend configured. Edit config/llm.toml to enable one.\x1b[0m");
+            }
+        }
+    }
+
+    /// Complete a request through the LLM router, recording usage to Mission Control.
+    async fn tracked_complete(&mut self, request: CompletionRequest) -> Option<CompletionResponse> {
+        let router = self.llm_router.as_ref()?;
+
+        // Grab backend info before the call
+        let backends = router.backend_info();
+        let active = backends.iter().find(|(_, _, avail)| *avail);
+        let (backend_name, model_name) = match active {
+            Some((b, m, _)) => (b.to_string(), m.to_string()),
+            None => ("unknown".to_string(), "unknown".to_string()),
+        };
+
+        let start = Instant::now();
+        let result = router.complete(request).await;
+        let latency_ms = start.elapsed().as_millis() as u64;
+
+        match result {
+            Ok(response) => {
+                self.usage_tracker.record(
+                    &backend_name,
+                    &model_name,
+                    response.usage.as_ref(),
+                    latency_ms,
+                );
+                Some(response)
+            }
+            Err(e) => {
+                eprintln!("\x1b[31mAI error: {}\x1b[0m", e);
+                // Still record the attempt (zero tokens, but captures latency)
+                self.usage_tracker.record(&backend_name, &model_name, None, latency_ms);
+                None
             }
         }
     }
@@ -830,6 +860,7 @@ impl ShellRouter {
             "ls", "cat", "cp", "mv", "rm", "mkdir", "rmdir", "grep", "find", "wc", "head",
             "tail", "ps", "kill", "top", "echo", "env", "pwd", "chmod", "df", "du", "date",
             "uptime", "whoami", "hostname", "cd", "export", "clear", "history", "help",
+            "sanitize", "usage",
         ];
 
         let input_lower = input.to_lowercase();
@@ -1000,7 +1031,7 @@ impl ShellRouter {
                 "ls", "cat", "cp", "mv", "rm", "mkdir", "rmdir", "grep", "find", "wc", "head",
                 "tail", "ps", "kill", "top", "echo", "env", "pwd", "chmod", "df", "du", "date",
                 "uptime", "whoami", "hostname", "cd", "export", "clear", "help",
-                "sanitize",
+                "sanitize", "usage",
             ]
             .into_iter()
             .map(String::from)

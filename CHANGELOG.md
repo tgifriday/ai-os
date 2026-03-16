@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.1.5 -- 2026-03-15
+
+### Mission Control (opt-in usage tracking)
+
+- Added `UsageTracker` in `aios-llm/src/usage.rs` -- records token usage, latency, and estimated cost per LLM query
+- Cost estimation tables for OpenAI (gpt-3.5 through o1) and Anthropic (haiku/sonnet/opus); local and network backends report as free
+- JSONL log file with configurable path and automatic rotation at `max_log_mb`
+- Optional webhook URL for pushing events to Slack/Grafana/etc. (config only, async push planned)
+- All three completion call sites now route through `tracked_complete()` which times every request and records to the tracker
+- Added `usage` shell builtin -- prints session stats: total queries, tokens, cost, avg latency, per-model breakdown, log path
+- Added `[mission_control]` config section (disabled by default, zero data leaves the machine)
+- Fixed `LlmConfig::default()` missing `mission_control` field
+
+### CLI improvements
+
+- `aish --help` / `aish -h` prints full usage reference (features, LLM control, config paths)
+- `aios-os --help` / `aios-os -h` prints usage reference
+- `usage` added to tab completion, help output, similar-commands list, and OS state command list
+
+### Docker multi-arch images
+
+- Release workflow now builds and pushes Docker images to `ghcr.io/tgifriday/ai-os` for `linux/amd64` and `linux/arm64`
+- Uses QEMU + Docker Buildx with GitHub Actions cache
+- README updated with `docker pull ghcr.io/tgifriday/ai-os:latest`
+
+### Project documentation
+
+- Added `ROADMAP.md` -- 4-phase public roadmap (Foundation → Enterprise → Ecosystem → Platform) with checkboxes
+- Added "Why This Matters" section to README with comparison table vs coding agents and AI terminals
+- Added `demos/` directory with three annotated transcript scripts (error recovery, plain English + pipes, live model switching)
+- Added GitHub issue templates (bug report, feature request) with structured forms
+- Updated config reference in README with `[mission_control]` section
+- Updated builtins table in README with `usage` command
+- Config files (`llm.toml`, `llm.yml`) now include commented `[mission_control]` example
+
+---
+
 ## 0.1.4 -- 2026-03-12
 
 ### CI fixes

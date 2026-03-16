@@ -12,7 +12,7 @@ gpu_layers = 0
 
 [network]
 enabled = true
-url = "http://192.168.0.232:11434"
+url = "http://localhost:11434"
 model = "llama3.1:8b"
 
 [cloud.openai]
@@ -24,3 +24,13 @@ model = "gpt-4o"
 enabled = false
 api_key_env = "ANTHROPIC_API_KEY"
 model = "claude-sonnet-4-20250514"
+
+# ── Mission Control (opt-in usage tracking) ──────────────────────────────────
+# Tracks token usage, cost estimates, and latency per query.
+# All data stays local unless you configure a webhook.
+# View session stats with the `usage` command inside the shell.
+[mission_control]
+enabled = false
+# log_path = "~/.config/aios/mission-control.jsonl"
+# webhook_url = "https://hooks.slack.com/services/..."
+# max_log_mb = 50

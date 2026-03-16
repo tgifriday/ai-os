@@ -3,3 +3,4 @@ target/
 *.md
 .cursor/
 .dockerignore
+demos/

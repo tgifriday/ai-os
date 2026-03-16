@@ -12,6 +12,46 @@ pub struct LlmConfig {
     pub network: NetworkConfig,
     #[serde(default)]
     pub cloud: CloudConfig,
+    #[serde(default)]
+    pub mission_control: MissionControlSection,
+}
+
+/// Mission Control config section — lives in the LLM config file.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MissionControlSection {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_mc_log_path")]
+    pub log_path: String,
+    #[serde(default)]
+    pub webhook_url: Option<String>,
+    #[serde(default = "default_mc_max_log_mb")]
+    pub max_log_mb: u64,
+}
+
+fn default_mc_log_path() -> String {
+    dirs::home_dir()
+        .map(|h| {
+            h.join(".config/aios/mission-control.jsonl")
+                .to_string_lossy()
+                .to_string()
+        })
+        .unwrap_or_else(|| "/tmp/aios-mission-control.jsonl".to_string())
+}
+
+fn default_mc_max_log_mb() -> u64 {
+    50
+}
+
+impl Default for MissionControlSection {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            log_path: default_mc_log_path(),
+            webhook_url: None,
+            max_log_mb: default_mc_max_log_mb(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,6 +156,7 @@ impl Default for LlmConfig {
             local: LocalConfig::default(),
             network: NetworkConfig::default(),
             cloud: CloudConfig::default(),
+            mission_control: MissionControlSection::default(),
         }
     }
 }
