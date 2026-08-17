@@ -1,0 +1,4 @@
+{
+  "name": "AIOS",
+  "install": "cargo build --workspace --release"
+}
