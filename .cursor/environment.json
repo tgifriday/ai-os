@@ -1,4 +1,11 @@
 {
   "name": "AIOS",
-  "install": "cargo build --workspace --release"
+  "install": "bash .cursor/install.sh",
+  "terminals": [
+    {
+      "name": "ollama",
+      "command": "ollama serve",
+      "description": "Local Ollama LLM server on 127.0.0.1:11434. Backs the default 'network' LLM backend used by aish/aios-os (see config/llm.toml)."
+    }
+  ]
 }
