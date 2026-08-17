@@ -93,11 +93,8 @@ $ df -h | @am I running low on disk space
 
 **Error recovery.** When commands fail, the AI explains what went wrong and how to fix it.
 
-**Switch AI models live.** No restart needed:
-
-```
-$ llm use ollama mistral
-  AI: online via network (mistral)
+**Switch AI models live.** No restart needed: :``` $	 llm use ollama
+mistral AI: online via network (mistral)
 
 $ llm use openai gpt-4o
   AI: online via openai (gpt-4o)
@@ -117,20 +114,16 @@ Out of the box, AIOS works as a normal shell. To activate AI, configure at least
 Run [Ollama](https://ollama.ai) on any machine on your network (or localhost):
 
 ```bash
-ollama pull qwen2.5-coder:3b
+ollama pull llama3.1:8b
 ollama serve
 ```
-
-`qwen2.5-coder:3b` is the recommended default: a small, code/CLI-focused model
-that runs fast on CPU (no GPU required) and is well suited to shell assistance.
-Any Ollama model works -- swap it with `llm model <name>` or by editing the config.
 
 ```toml
 # config/llm.toml
 [network]
 enabled = true
 url = "http://localhost:11434"     # Or http://192.168.1.100:11434
-model = "qwen2.5-coder:3b"
+model = "llama3.1:8b"
 ```
 
 No API key needed. Works entirely on your LAN.
@@ -196,7 +189,7 @@ YAML example
 network:
   enabled: true
   url: "http://localhost:11434"
-  model: "qwen2.5-coder:3b"
+  model: "llama3.1:8b"
 ```
 
 
@@ -208,7 +201,7 @@ JSON example
   "network": {
     "enabled": true,
     "url": "http://localhost:11434",
-    "model": "qwen2.5-coder:3b"
+    "model": "llama3.1:8b"
   }
 }
 ```
@@ -525,7 +518,7 @@ gpu_layers = 0
 [network]
 enabled = true
 url = "http://localhost:11434"
-model = "qwen2.5-coder:3b"
+model = "llama3.1:8b"
 
 [cloud.openai]
 enabled = false

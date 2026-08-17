@@ -13,7 +13,9 @@ gpu_layers = 0
 [network]
 enabled = true
 url = "http://localhost:11434"
-model = "llama3.1:8b"
+# Small, fast, CPU-friendly code/CLI model well suited to shell assistance
+# (command generation, output explanation, typo/error recovery).
+model = "qwen2.5-coder:3b"
 
 [cloud.openai]
 enabled = false

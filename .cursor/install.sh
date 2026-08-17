@@ -7,7 +7,7 @@
 # guarded steps are skipped and only the incremental cargo build runs.
 set -euo pipefail
 
-MODEL="${AIOS_DEFAULT_MODEL:-llama3.1:8b}"
+MODEL="${AIOS_DEFAULT_MODEL:-qwen2.5-coder:3b}"
 OLLAMA_HOST="${OLLAMA_HOST:-127.0.0.1:11434}"
 export OLLAMA_HOST
 
