@@ -690,7 +690,20 @@ impl ShellRouter {
     }
 
     async fn handle_ai_query(&mut self, query: &str) {
-        self.handle_ai_query_with_options(query, true, true, true).await;
+        // Instant, deterministic answers for common intents skip the LLM entirely
+        // (no model prefill), keeping the shell responsive. Falls through to the
+        // LLM when no rule matches with confidence.
+        if let Some(answer) = crate::fastpath::try_fast_answer(query) {
+            tracing::debug!(rule = answer.rule, "fast-path answer");
+            println!("\x1b[36m{}\x1b[0m", answer.text);
+            return;
+        }
+        // Only gather (and prefill) directory context when the query is actually
+        // about the filesystem; otherwise it needlessly inflates the prompt and
+        // slows down inference.
+        let include_dir = query_wants_directory_context(query);
+        self.handle_ai_query_with_options(query, true, include_dir, true)
+            .await;
     }
 
     async fn handle_ai_pipe_query(&mut self, action: &str, output: &str) {
@@ -1067,6 +1080,18 @@ impl ShellRouter {
             }
         }
     }
+}
+
+/// Whether a natural-language query is about the local filesystem and would
+/// benefit from directory-listing context. Keeps prompts small for unrelated
+/// questions.
+fn query_wants_directory_context(query: &str) -> bool {
+    let q = query.to_lowercase();
+    const FS_HINTS: &[&str] = &[
+        "file", "folder", "directory", "director", "ls ", "list", "these ", "this dir", "here",
+        "current dir", "path", "contents", "what's in", "whats in", "size of", "how big", "disk",
+    ];
+    FS_HINTS.iter().any(|h| q.contains(h))
 }
 
 fn levenshtein(a: &str, b: &str) -> usize {

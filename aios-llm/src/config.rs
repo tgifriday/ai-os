@@ -76,6 +76,9 @@ pub struct LocalConfig {
     pub threads: u32,
     #[serde(default)]
     pub gpu_layers: u32,
+    /// Context window (tokens) for the in-process GGUF backend.
+    #[serde(default = "default_n_ctx")]
+    pub n_ctx: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,6 +125,10 @@ fn default_model_path() -> String {
 
 fn default_threads() -> u32 {
     4
+}
+
+fn default_n_ctx() -> u32 {
+    4096
 }
 
 fn default_network_url() -> String {
@@ -179,6 +186,7 @@ impl Default for LocalConfig {
             model_path: default_model_path(),
             threads: default_threads(),
             gpu_layers: 0,
+            n_ctx: default_n_ctx(),
         }
     }
 }

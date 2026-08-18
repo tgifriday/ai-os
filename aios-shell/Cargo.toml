@@ -18,6 +18,11 @@ path = "src/main.rs"
 name = "aios-os"
 path = "src/main_os.rs"
 
+[features]
+# Forwards to aios-llm's embedded llama.cpp GGUF backend. Build with
+# `make build-local` (needs Rust >= 1.85, cmake, a C/C++ compiler, clang).
+local-inference = ["aios-llm/local-inference"]
+
 [dependencies]
 aios-kernel = { path = "../aios-kernel" }
 aios-core = { path = "../aios-core" }

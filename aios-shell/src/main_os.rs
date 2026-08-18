@@ -1,5 +1,6 @@
 mod completion;
 mod executor;
+mod fastpath;
 mod history;
 mod parser;
 mod prompt;
