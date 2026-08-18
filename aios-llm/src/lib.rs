@@ -3,6 +3,8 @@ pub mod cloud;
 pub mod config;
 pub mod context;
 pub mod local;
+#[cfg(feature = "local-inference")]
+pub mod local_llama;
 pub mod network;
 pub mod router;
 pub mod usage;

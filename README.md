@@ -165,6 +165,62 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 cargo run -p aios-shell
 ```
 
+### Option 4: In-process local model (embedded llama.cpp, no server)
+
+Run a quantized GGUF model **directly inside the shell** — no Ollama, no server,
+no network. This is compiled behind the optional `local-inference` feature.
+
+```bash
+make local-deps          # one-time: cmake, C/C++ compiler, clang (Rust >= 1.85)
+make fetch-local-model   # downloads qwen2.5-coder:3b GGUF to ~/.aios/models
+make build-local         # builds aish/aios-os with in-process inference
+```
+
+Then enable it in `config/llm.toml`:
+
+```toml
+[local]
+enabled = true
+model_path = "~/.aios/models/qwen2.5-coder-3b-instruct-q4_k_m.gguf"
+n_ctx = 4096
+
+[network]
+enabled = false
+```
+
+The model is loaded once when the shell starts and stays resident, so queries
+run in-process at llama.cpp speed. `qwen2.5-coder:3b` is the recommended default
+(good shell/coding quality, ~1-3s answers on CPU). For lower latency, fetch a
+smaller model and point `model_path` at it:
+
+```bash
+AIOS_LOCAL_MODEL_URL="https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf" make fetch-local-model
+```
+
+### Instant answers (no model)
+
+Common, unambiguous requests are answered instantly by a built-in deterministic
+fast-path — no model prefill, microsecond latency — before any LLM is consulted:
+
+```
+$ @list files larger than 100MB
+  find . -type f -size +100M
+$ @what does chmod 755 do
+  chmod 755 sets permissions to owner: read/write/execute, group: read/execute, others: read/execute.
+$ @I typed 'gti status', what did I mean?
+  You likely meant git (not gti).
+```
+
+Anything the fast-path doesn't recognize falls through to the configured LLM.
+Set `AIOS_FASTPATH=0` to disable it.
+
+### Turbo: smaller models for lower latency
+
+Any backend can trade some quality for speed by switching to a smaller model.
+For Ollama: `ollama pull qwen2.5-coder:1.5b` then `llm model qwen2.5-coder:1.5b`
+(or set it in `config/llm.toml`). The 1.5B variant roughly doubles throughput on
+CPU; the 3B default is a better balance of speed and shell-task accuracy.
+
 ### Switching Backends Live
 
 You don't have to restart the shell to change backends. Use the `llm` command:

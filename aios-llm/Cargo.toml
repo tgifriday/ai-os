@@ -22,3 +22,11 @@ tokio-stream = "0.1"
 async-stream = "0.3"
 chrono = { workspace = true }
 dirs = "6"
+llama-cpp-2 = { version = "0.1", optional = true }
+
+[features]
+# Compile an embedded llama.cpp for in-process GGUF inference (the `local`
+# backend). Off by default so the standard build stays lightweight and needs
+# no C/C++ toolchain. Requires Rust >= 1.85, cmake, a C/C++ compiler, and
+# clang/libclang (see `make build-local`).
+local-inference = ["dep:llama-cpp-2"]

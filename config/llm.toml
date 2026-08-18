@@ -4,11 +4,16 @@ fallback = ["network", "cloud"]
 max_context_tokens = 4096
 stream_responses = true
 
+# In-process GGUF inference via embedded llama.cpp (no external server).
+# Requires a build with the `local-inference` feature (see `make build-local`)
+# and a downloaded model (see `scripts/fetch-local-model.sh`). Enable this and
+# disable [network] to run fully self-contained.
 [local]
 enabled = false
-model_path = "/var/aios/models/phi-3-mini-Q4.gguf"
+model_path = "~/.aios/models/qwen2.5-coder-3b-instruct-q4_k_m.gguf"
 threads = 4
 gpu_layers = 0
+n_ctx = 4096
 
 [network]
 enabled = true
